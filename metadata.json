@@ -1,0 +1,6 @@
+{
+  "name": "Smart Warehouse",
+  "description": "Smart Warehouse Inventory and Asset Tracking System with offline-first Room database, barcode scanning, stock operations, and asset management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
