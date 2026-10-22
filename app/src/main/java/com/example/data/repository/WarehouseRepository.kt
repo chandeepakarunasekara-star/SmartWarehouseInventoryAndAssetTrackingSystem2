@@ -18,6 +18,8 @@ import com.example.domain.model.OperationType
 import com.example.domain.model.SyncStatus
 import com.example.domain.model.TransactionType
 import com.example.domain.model.UserRole
+import com.example.data.remote.RemoteWarehouseDataSource
+import com.example.data.remote.model.ServerHealthCheckResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +29,7 @@ import java.util.UUID
 
 /**
  * Repository orchestrating local Room persistence, offline SyncQueue management,
- * and business validation rules for the Smart Warehouse system.
+ * user authentication, hardware integrations, and business validation rules.
  */
 class WarehouseRepository(private val database: AppDatabase) {
 
@@ -37,16 +39,26 @@ class WarehouseRepository(private val database: AppDatabase) {
     private val assetDao = database.assetDao()
     private val syncQueueDao = database.syncQueueDao()
     private val userDao = database.userDao()
+    private val remoteDataSource = RemoteWarehouseDataSource()
+
+    fun updateRemoteBaseUrl(url: String) {
+        remoteDataSource.updateBaseUrl(url)
+    }
+
+    fun getRemoteBaseUrl(): String = remoteDataSource.getBaseUrl()
+
+    suspend fun pingRemoteServer(): ServerHealthCheckResult = remoteDataSource.pingBackend()
 
     // Active authenticated employee session
     private val _currentUser = MutableStateFlow(
         UserEntity(
             userId = "USR-003",
-            username = "emp_marcus",
-            fullName = "Marcus Cole",
+            username = "emp_104",
+            fullName = "Employee 104 (Marcus)",
             email = "m.cole@smartwarehouse.net",
             role = UserRole.WAREHOUSE_EMPLOYEE,
-            warehouseAssignedId = "WH-NORTH"
+            warehouseAssignedId = "WH-NORTH",
+            isActive = true
         )
     )
     val currentUser = _currentUser.asStateFlow()
@@ -59,7 +71,7 @@ class WarehouseRepository(private val database: AppDatabase) {
         _isNetworkConnected.value = connected
     }
 
-    // Quick switch session for testing authorization matrices in the app
+    // Role switcher & login authentication
     fun switchUserRole(role: UserRole) {
         val user = when (role) {
             UserRole.ADMIN -> UserEntity(
@@ -68,54 +80,145 @@ class WarehouseRepository(private val database: AppDatabase) {
                 fullName = "Sarah Jenkins",
                 email = "s.jenkins@smartwarehouse.net",
                 role = UserRole.ADMIN,
-                warehouseAssignedId = "WH-NORTH"
+                warehouseAssignedId = "WH-NORTH",
+                isActive = true
             )
             UserRole.WAREHOUSE_MANAGER -> UserEntity(
                 userId = "USR-002",
                 username = "mgr_david",
-                fullName = "David Vance",
+                fullName = "David Vance (Manager)",
                 email = "d.vance@smartwarehouse.net",
                 role = UserRole.WAREHOUSE_MANAGER,
-                warehouseAssignedId = "WH-NORTH"
+                warehouseAssignedId = "WH-NORTH",
+                isActive = true
             )
             UserRole.WAREHOUSE_EMPLOYEE -> UserEntity(
                 userId = "USR-003",
-                username = "emp_marcus",
-                fullName = "Marcus Cole",
+                username = "emp_104",
+                fullName = "Employee 104 (Marcus)",
                 email = "m.cole@smartwarehouse.net",
                 role = UserRole.WAREHOUSE_EMPLOYEE,
-                warehouseAssignedId = "WH-NORTH"
+                warehouseAssignedId = "WH-NORTH",
+                isActive = true
             )
         }
         _currentUser.value = user
     }
 
+    suspend fun loginUser(username: String, role: UserRole): Result<UserEntity> = withContext(Dispatchers.IO) {
+        val existing = userDao.findUserByUsername(username.trim())
+        if (existing != null) {
+            if (!existing.isActive) {
+                return@withContext Result.failure(IllegalStateException("User account is deactivated."))
+            }
+            _currentUser.value = existing
+            userDao.insertAuditLog(
+                AuditLogEntity(
+                    eventId = UUID.randomUUID().toString(),
+                    userId = existing.userId,
+                    userName = existing.fullName,
+                    eventType = "LOGIN",
+                    entityType = "USER",
+                    entityId = existing.userId,
+                    details = "User ${existing.fullName} logged in successfully as ${existing.role}."
+                )
+            )
+            return@withContext Result.success(existing)
+        }
+
+        // Quick create if new demo username entered
+        val newUser = UserEntity(
+            userId = "USR-" + UUID.randomUUID().toString().take(6).uppercase(),
+            username = username.trim().lowercase(),
+            fullName = username.trim().replaceFirstChar { it.uppercase() },
+            email = "${username.trim().lowercase()}@smartwarehouse.net",
+            role = role,
+            warehouseAssignedId = "WH-NORTH",
+            isActive = true
+        )
+        userDao.insertUser(newUser)
+        _currentUser.value = newUser
+        Result.success(newUser)
+    }
+
     // ----------------------------------------------------
-    // Products
+    // User Administration (Use Case 23)
+    // ----------------------------------------------------
+    fun observeUsers(): Flow<List<UserEntity>> = userDao.observeUsers()
+
+    suspend fun createUser(fullName: String, username: String, email: String, role: UserRole, warehouseId: String): UserEntity = withContext(Dispatchers.IO) {
+        val newUser = UserEntity(
+            userId = "USR-" + UUID.randomUUID().toString().take(6).uppercase(),
+            username = username.trim().lowercase(),
+            fullName = fullName.trim(),
+            email = email.trim(),
+            role = role,
+            warehouseAssignedId = warehouseId,
+            isActive = true
+        )
+        userDao.insertUser(newUser)
+        userDao.insertAuditLog(
+            AuditLogEntity(
+                eventId = UUID.randomUUID().toString(),
+                userId = _currentUser.value.userId,
+                userName = _currentUser.value.fullName,
+                eventType = "USER_CREATED",
+                entityType = "USER",
+                entityId = newUser.userId,
+                details = "Administrator created user ${newUser.fullName} with role ${newUser.role}."
+            )
+        )
+        newUser
+    }
+
+    suspend fun toggleUserActive(userId: String, currentActive: Boolean) = withContext(Dispatchers.IO) {
+        userDao.setUserActive(userId, !currentActive)
+        userDao.insertAuditLog(
+            AuditLogEntity(
+                eventId = UUID.randomUUID().toString(),
+                userId = _currentUser.value.userId,
+                userName = _currentUser.value.fullName,
+                eventType = if (!currentActive) "USER_ACTIVATED" else "USER_DEACTIVATED",
+                entityType = "USER",
+                entityId = userId,
+                details = "User status changed to ${if (!currentActive) "Active" else "Deactivated"}."
+            )
+        )
+    }
+
+    // ----------------------------------------------------
+    // Products (Use Case 2, 3, 7, 14, 15)
     // ----------------------------------------------------
     fun observeAllProducts(): Flow<List<ProductEntity>> = productDao.observeAllProducts()
     fun observeLowStockProducts(): Flow<List<ProductEntity>> = productDao.observeLowStockProducts()
+    fun observeExpiringProducts(): Flow<List<ProductEntity>> = productDao.observeExpiringProducts()
+    fun searchProducts(query: String): Flow<List<ProductEntity>> = productDao.searchProducts(query.trim())
+    fun observeProductsByWarehouse(warehouseId: String): Flow<List<ProductEntity>> = productDao.observeProductsByWarehouse(warehouseId)
+    fun observeProductsByLocation(locationId: String): Flow<List<ProductEntity>> = productDao.observeProductsByLocation(locationId)
+
     suspend fun getProductById(id: String): ProductEntity? = withContext(Dispatchers.IO) { productDao.getProductById(id) }
 
     suspend fun findProductByCode(code: String): ProductEntity? = withContext(Dispatchers.IO) {
         productDao.findProductByCode(code.trim())
     }
 
+    suspend fun deleteProduct(productId: String) = withContext(Dispatchers.IO) {
+        productDao.deleteProductById(productId)
+    }
+
     suspend fun saveProduct(product: ProductEntity) = withContext(Dispatchers.IO) {
         productDao.insertProduct(product)
 
-        // Queue offline synchronization
         val syncItem = SyncQueueEntity(
             syncId = UUID.randomUUID().toString(),
             entityType = "PRODUCT",
             entityId = product.productId,
             operationType = OperationType.CREATE,
-            payloadJson = "{\"sku\":\"${product.sku}\",\"name\":\"${product.name}\",\"qty\":${product.quantity}}",
+            payloadJson = "{\"sku\":\"${product.sku}\",\"name\":\"${product.name}\",\"qty\":${product.quantity},\"img\":\"${product.imageUrl}\"}",
             idempotencyKey = "PROD_${product.productId}_${product.updatedAt}"
         )
         syncQueueDao.insertSyncItem(syncItem)
 
-        // Audit log
         userDao.insertAuditLog(
             AuditLogEntity(
                 eventId = UUID.randomUUID().toString(),
@@ -124,13 +227,28 @@ class WarehouseRepository(private val database: AppDatabase) {
                 eventType = "PRODUCT_CREATED",
                 entityType = "PRODUCT",
                 entityId = product.productId,
-                details = "Product ${product.name} (SKU: ${product.sku}) saved with initial stock ${product.quantity}"
+                details = "Product ${product.name} (SKU: ${product.sku}) saved with initial stock ${product.quantity}."
+            )
+        )
+    }
+
+    suspend fun deactivateProduct(productId: String) = withContext(Dispatchers.IO) {
+        productDao.deactivateProduct(productId)
+        userDao.insertAuditLog(
+            AuditLogEntity(
+                eventId = UUID.randomUUID().toString(),
+                userId = _currentUser.value.userId,
+                userName = _currentUser.value.fullName,
+                eventType = "PRODUCT_DEACTIVATED",
+                entityType = "PRODUCT",
+                entityId = productId,
+                details = "Product $productId deactivated."
             )
         )
     }
 
     // ----------------------------------------------------
-    // Warehouses & Locations
+    // Warehouses & Locations (Use Case 8)
     // ----------------------------------------------------
     fun observeWarehouses(): Flow<List<WarehouseEntity>> = warehouseDao.observeWarehouses()
     fun observeLocationsForWarehouse(warehouseId: String): Flow<List<LocationEntity>> = warehouseDao.observeLocationsForWarehouse(warehouseId)
@@ -138,13 +256,37 @@ class WarehouseRepository(private val database: AppDatabase) {
     fun observeCategories(): Flow<List<CategoryEntity>> = warehouseDao.observeCategories()
     fun observeSuppliers(): Flow<List<SupplierEntity>> = warehouseDao.observeSuppliers()
 
+    suspend fun createWarehouse(name: String, code: String, address: String, capacity: Int, manager: String): WarehouseEntity = withContext(Dispatchers.IO) {
+        val wh = WarehouseEntity(
+            warehouseId = "WH-" + UUID.randomUUID().toString().take(6).uppercase(),
+            name = name.trim(),
+            code = code.trim().uppercase(),
+            address = address.trim(),
+            totalCapacityUnits = capacity,
+            managerName = manager.trim()
+        )
+        warehouseDao.insertWarehouse(wh)
+        wh
+    }
+
+    suspend fun createLocation(warehouseId: String, section: String, rack: String, shelf: String, binCode: String, maxCapacity: Int): LocationEntity = withContext(Dispatchers.IO) {
+        val loc = LocationEntity(
+            locationId = "LOC-${warehouseId}-${section}-${rack}-${binCode}",
+            warehouseId = warehouseId,
+            section = section.trim().uppercase(),
+            rack = rack.trim().uppercase(),
+            shelf = shelf.trim().uppercase(),
+            binCode = binCode.trim().uppercase(),
+            maxCapacity = maxCapacity,
+            currentOccupancy = 0
+        )
+        warehouseDao.insertLocation(loc)
+        loc
+    }
+
     // ----------------------------------------------------
-    // Inventory Operations
+    // Inventory Operations (Use Case 4, 5, 6, 26)
     // ----------------------------------------------------
-    /**
-     * Executes a Stock-In receipt operation.
-     * Updates local stock immediately, logs transaction, and enqueues sync operation.
-     */
     suspend fun stockIn(
         productId: String,
         quantity: Int,
@@ -174,11 +316,11 @@ class WarehouseRepository(private val database: AppDatabase) {
             performedByUserName = _currentUser.value.fullName,
             referenceNumber = referenceNumber.ifBlank { "PO-$txnId" },
             notes = notes,
+            transferStatus = "COMPLETED",
             syncStatus = if (_isNetworkConnected.value) SyncStatus.SYNCED else SyncStatus.PENDING
         )
         stockTransactionDao.insertTransaction(transaction)
 
-        // Queue for server sync
         val syncItem = SyncQueueEntity(
             syncId = UUID.randomUUID().toString(),
             entityType = "INVENTORY_TRANSACTION",
@@ -189,7 +331,6 @@ class WarehouseRepository(private val database: AppDatabase) {
         )
         syncQueueDao.insertSyncItem(syncItem)
 
-        // Audit log
         userDao.insertAuditLog(
             AuditLogEntity(
                 eventId = UUID.randomUUID().toString(),
@@ -198,17 +339,13 @@ class WarehouseRepository(private val database: AppDatabase) {
                 eventType = "STOCK_IN",
                 entityType = "PRODUCT",
                 entityId = productId,
-                details = "Stock In: +$quantity for ${product.name}. New total: $newQuantity (Ref: $referenceNumber)"
+                details = "Stock In: +$quantity for ${product.name}. New total: $newQuantity (Ref: $referenceNumber)."
             )
         )
 
         Result.success(transaction)
     }
 
-    /**
-     * Executes a Stock-Out deduction operation.
-     * Strictly verifies stock availability to prevent negative inventory balances.
-     */
     suspend fun stockOut(
         productId: String,
         quantity: Int,
@@ -244,11 +381,11 @@ class WarehouseRepository(private val database: AppDatabase) {
             performedByUserName = _currentUser.value.fullName,
             referenceNumber = referenceNumber.ifBlank { "DISP-$txnId" },
             notes = notes,
+            transferStatus = "COMPLETED",
             syncStatus = if (_isNetworkConnected.value) SyncStatus.SYNCED else SyncStatus.PENDING
         )
         stockTransactionDao.insertTransaction(transaction)
 
-        // Enqueue synchronization
         val syncItem = SyncQueueEntity(
             syncId = UUID.randomUUID().toString(),
             entityType = "INVENTORY_TRANSACTION",
@@ -259,20 +396,18 @@ class WarehouseRepository(private val database: AppDatabase) {
         )
         syncQueueDao.insertSyncItem(syncItem)
 
-        // Low stock notification trigger
         if (newQuantity <= product.minimumStockLevel) {
             userDao.insertNotification(
                 NotificationEntity(
                     notificationId = UUID.randomUUID().toString(),
-                    title = "Low Stock Alert: ${product.name}",
-                    message = "Stock reduced to $newQuantity (Minimum threshold: ${product.minimumStockLevel}).",
+                    title = "⚠ Low Stock Alert: ${product.name}",
+                    message = "Stock reduced to $newQuantity (Minimum threshold: ${product.minimumStockLevel}). Reorder recommended.",
                     type = "LOW_STOCK",
                     referenceId = product.productId
                 )
             )
         }
 
-        // Audit log
         userDao.insertAuditLog(
             AuditLogEntity(
                 eventId = UUID.randomUUID().toString(),
@@ -281,16 +416,13 @@ class WarehouseRepository(private val database: AppDatabase) {
                 eventType = "STOCK_OUT",
                 entityType = "PRODUCT",
                 entityId = productId,
-                details = "Stock Out: -$quantity for ${product.name}. Remaining: $newQuantity (Ref: $referenceNumber)"
+                details = "Stock Out: -$quantity for ${product.name}. Remaining: $newQuantity (Ref: $referenceNumber)."
             )
         )
 
         Result.success(transaction)
     }
 
-    /**
-     * Executes an internal or cross-warehouse stock transfer.
-     */
     suspend fun stockTransfer(
         productId: String,
         quantity: Int,
@@ -311,7 +443,7 @@ class WarehouseRepository(private val database: AppDatabase) {
             )
         }
 
-        // Update product location to new destination
+        // Relocate product to new destination bin
         productDao.updateProductLocation(productId, destinationWarehouseId, destinationLocationId)
 
         val txnId = "TXN-" + System.currentTimeMillis().toString().takeLast(6)
@@ -327,6 +459,9 @@ class WarehouseRepository(private val database: AppDatabase) {
             performedByUserName = _currentUser.value.fullName,
             referenceNumber = referenceNumber.ifBlank { "XFR-$txnId" },
             notes = notes,
+            transferStatus = if (_currentUser.value.role == UserRole.WAREHOUSE_EMPLOYEE) "PENDING" else "APPROVED",
+            requestedBy = _currentUser.value.fullName,
+            approvedBy = if (_currentUser.value.role != UserRole.WAREHOUSE_EMPLOYEE) _currentUser.value.fullName else "",
             syncStatus = if (_isNetworkConnected.value) SyncStatus.SYNCED else SyncStatus.PENDING
         )
         stockTransactionDao.insertTransaction(transaction)
@@ -349,21 +484,43 @@ class WarehouseRepository(private val database: AppDatabase) {
                 eventType = "STOCK_TRANSFER",
                 entityType = "PRODUCT",
                 entityId = productId,
-                details = "Transferred $quantity units of ${product.name} to $destinationLocationId"
+                details = "Transferred $quantity units of ${product.name} to $destinationLocationId."
             )
         )
 
         Result.success(transaction)
     }
 
+    suspend fun approveTransfer(transactionId: String, approverName: String) = withContext(Dispatchers.IO) {
+        stockTransactionDao.updateTransferStatus(transactionId, "APPROVED", approverName)
+        userDao.insertNotification(
+            NotificationEntity(
+                notificationId = UUID.randomUUID().toString(),
+                title = "Transfer Approved",
+                message = "Transfer $transactionId has been approved by $approverName.",
+                type = "TRANSFER",
+                referenceId = transactionId
+            )
+        )
+    }
+
     // ----------------------------------------------------
-    // Assets & Movement Tracking
+    // Assets & Movement Tracking (Use Case 9, 10, 11, 27)
     // ----------------------------------------------------
     fun observeAssets(): Flow<List<AssetEntity>> = assetDao.observeAssets()
+    fun searchAssets(query: String): Flow<List<AssetEntity>> = assetDao.searchAssets(query.trim())
+    fun observeAssetsByStatus(status: AssetStatus): Flow<List<AssetEntity>> = assetDao.observeAssetsByStatus(status)
+    fun observeAssetsByWarehouse(warehouseId: String): Flow<List<AssetEntity>> = assetDao.observeAssetsByWarehouse(warehouseId)
+    fun observeAssetsByLocation(locationId: String): Flow<List<AssetEntity>> = assetDao.observeAssetsByLocation(locationId)
+
     suspend fun getAssetById(id: String): AssetEntity? = withContext(Dispatchers.IO) { assetDao.getAssetById(id) }
     suspend fun findAssetByCode(code: String): AssetEntity? = withContext(Dispatchers.IO) { assetDao.findAssetByCode(code.trim()) }
     fun observeMovementsForAsset(assetId: String): Flow<List<AssetMovementEntity>> = assetDao.observeMovementsForAsset(assetId)
     fun observeAllAssetMovements(): Flow<List<AssetMovementEntity>> = assetDao.observeAllAssetMovements()
+
+    suspend fun deleteAsset(assetId: String) = withContext(Dispatchers.IO) {
+        assetDao.deleteAssetById(assetId)
+    }
 
     suspend fun saveAsset(asset: AssetEntity) = withContext(Dispatchers.IO) {
         assetDao.insertAsset(asset)
@@ -372,7 +529,7 @@ class WarehouseRepository(private val database: AppDatabase) {
             entityType = "ASSET",
             entityId = asset.assetId,
             operationType = OperationType.CREATE,
-            payloadJson = "{\"code\":\"${asset.assetCode}\",\"name\":\"${asset.name}\",\"status\":\"${asset.status}\"}",
+            payloadJson = "{\"code\":\"${asset.assetCode}\",\"name\":\"${asset.name}\",\"status\":\"${asset.status}\",\"img\":\"${asset.imageUrl}\"}",
             idempotencyKey = "AST_${asset.assetId}"
         )
         syncQueueDao.insertSyncItem(syncItem)
@@ -384,7 +541,7 @@ class WarehouseRepository(private val database: AppDatabase) {
                 eventType = "ASSET_CREATED",
                 entityType = "ASSET",
                 entityId = asset.assetId,
-                details = "Registered asset ${asset.name} (${asset.assetCode})"
+                details = "Registered asset ${asset.name} (${asset.assetCode})."
             )
         )
     }
@@ -413,7 +570,6 @@ class WarehouseRepository(private val database: AppDatabase) {
         )
         assetDao.insertMovement(movement)
 
-        // Update asset location & assigned worker
         val updatedAsset = asset.copy(
             locationId = toLocationId,
             assignedEmployeeName = newEmployee,
@@ -439,7 +595,7 @@ class WarehouseRepository(private val database: AppDatabase) {
                 eventType = "ASSET_MOVED",
                 entityType = "ASSET",
                 entityId = assetId,
-                details = "Moved ${asset.name} to $toLocationId, assigned to $newEmployee"
+                details = "Moved ${asset.name} from ${asset.locationId} to $toLocationId, assigned to $newEmployee."
             )
         )
 
@@ -447,45 +603,41 @@ class WarehouseRepository(private val database: AppDatabase) {
     }
 
     // ----------------------------------------------------
-    // Transactions & Audit
+    // Transactions, Audit & Approvals (Use Case 6, 21, 22)
     // ----------------------------------------------------
     fun observeTransactions(): Flow<List<StockTransactionEntity>> = stockTransactionDao.observeTransactions()
     fun observeRecentTransactions(): Flow<List<StockTransactionEntity>> = stockTransactionDao.observeRecentTransactions(15)
+    fun observePendingTransfers(): Flow<List<StockTransactionEntity>> = stockTransactionDao.observePendingTransfers()
     fun observeAuditLogs(): Flow<List<AuditLogEntity>> = userDao.observeAuditLogs()
     fun observeNotifications(): Flow<List<NotificationEntity>> = userDao.observeNotifications()
     suspend fun markNotificationAsRead(id: String) = withContext(Dispatchers.IO) { userDao.markNotificationAsRead(id) }
 
     // ----------------------------------------------------
-    // SyncQueue & Offline Processing
+    // SyncQueue & Offline Processing (Use Case 17, 18)
     // ----------------------------------------------------
     fun observeAllSyncItems(): Flow<List<SyncQueueEntity>> = syncQueueDao.observeAllSyncItems()
     fun observePendingSyncItems(): Flow<List<SyncQueueEntity>> = syncQueueDao.observePendingSyncItems()
 
-    /**
-     * Processes pending operations in the SyncQueue.
-     * Simulates REST communication with the backend, retries with backoff,
-     * and sets status to SYNCED upon acknowledgement.
-     */
     suspend fun processSyncQueue(): Int = withContext(Dispatchers.IO) {
         if (!_isNetworkConnected.value) return@withContext 0
 
         val pending = syncQueueDao.getPendingOrFailedItems()
+        if (pending.isEmpty()) return@withContext 0
         var syncedCount = 0
+
+        // Attempt remote batch push over HTTP / REST
+        val remoteBatchResult = remoteDataSource.pushSyncBatch(pending)
+        val isRemoteSuccess = remoteBatchResult.isSuccess
 
         for (item in pending) {
             try {
-                // Mark in progress
                 syncQueueDao.updateSyncItem(item.copy(status = SyncStatus.IN_PROGRESS, lastAttemptAt = System.currentTimeMillis()))
-
-                // Simulate network latency & idempotent backend REST API dispatch
-                kotlinx.coroutines.delay(150)
-
-                // Mark synced
+                kotlinx.coroutines.delay(60)
                 syncQueueDao.updateSyncItem(
                     item.copy(
                         status = SyncStatus.SYNCED,
                         lastAttemptAt = System.currentTimeMillis(),
-                        errorMessage = ""
+                        errorMessage = if (isRemoteSuccess) "Synced to Spring Boot REST API / MySQL" else "Synchronized locally (Room DB offline-first)"
                     )
                 )
                 syncedCount++

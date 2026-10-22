@@ -1,114 +1,70 @@
-# Smart Warehouse Inventory and Asset Tracking System — Progress Report
+# Smart Warehouse Inventory and Asset Tracking System — Comprehensive Progress Report
 
 **Document Date:** October 2026  
-**Project Path (Mandatory D: Rule):** `D:\MyProjects\smart-warehouse-inventory\`  
-**Target Environment:** Android (Kotlin, Jetpack Compose, Material 3) + Spring Boot REST API + MySQL + Room Local DB  
+**Storage Architecture Compliant:** `D:\MyProjects\smart-warehouse-inventory\`  
+**Target Environment:** Android (Kotlin, Jetpack Compose, Material 3 Colorful Minimalism) + Room Local Database + Spring Boot REST API + MySQL / Firebase Cloud  
 
 ---
 
-## 1. Executive Summary
+## 1. Specification Compliance & PDF Use Cases Implementation
 
-The **Smart Warehouse Inventory and Asset Tracking System** has completed foundational, database, offline-first, UI, transactional, hardware abstraction, and analytics phases according to the project development instructions (`instructions.md`).
+All **28 Use Cases** described in the system specification document have been fully implemented in the Android application architecture:
 
-The application features a **minimalist UI theme** throughout all screens, adhering to a muted industrial color palette (slate, sage teal, muted amber, muted coral) and universal rounded component styling (`RoundedCornerShape(16.dp)`, `24.dp`, and pill buttons).
-
----
-
-## 2. Phase-by-Phase Progress & Completed Milestones
-
-### Phase 1 & 2: Project & Android Foundation (Completed)
-- **Application Identification:** Updated `applicationId` to `com.aistudio.warehouse.invxqa`, project name to "Smart Warehouse", and `metadata.json` platform synchronization.
-- **Custom Adaptive Launcher Icon:** Generated custom minimalist warehouse logistics icon centered on solid `#1E293B` background, with adaptive wrapper and multi-density mipmaps generated via ImageMagick.
-- **Hardware & System Permissions:** Configured `AndroidManifest.xml` with least-privilege permissions: `CAMERA`, `VIBRATE`, `INTERNET`, `ACCESS_NETWORK_STATE`, `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`, and `NFC`.
-- **D: Drive Storage Rule:** Project directory structure and configuration aligned to avoid C: drive consumption for development assets.
-
-### Phase 3 & 4: UI Architecture & Role-Based Authentication (Completed)
-- **Minimalist Theme (`Color.kt`, `Theme.kt`):**
-  - Muted palette: Slate (`#0F172A`, `#1E293B`, `#64748B`, `#F8FAFC`), Sage Teal (`#0F766E`, `#14B8A6`), Warm Amber (`#D97706`), Coral (`#BE123C`).
-  - Rounded geometry: Universal rounded corners across cards, buttons, text inputs, and chips.
-- **Role-Based Authorization (`UserRole`):**
-  - `ADMIN` (Sarah Jenkins): Master catalog, warehouse setup, user management, audit logs.
-  - `WAREHOUSE_MANAGER` (David Vance): Stock movements, transfers, approvals, asset allocation.
-  - `WAREHOUSE_EMPLOYEE` (Marcus Cole): Fast barcode scanning, stock-in receipt, stock-out dispatch, bin lookups.
-  - Interactive **Demo Role Switcher** in Settings allowing instant evaluation of role capabilities.
-
-### Phase 5: Room Local Database (Offline-First) (Completed)
-Created 12 Room database entities, 6 DAOs, and type converters with pre-populated demo data:
-1. `UserEntity`: Employee profiles, roles, warehouse assignments.
-2. `CategoryEntity`: Industrial Hardware, Electronics, Packaging, Batteries, Safety PPE.
-3. `SupplierEntity`: Apex Heavy Logistics, Titan Supply, NexGen Microcircuits.
-4. `WarehouseEntity`: North Distribution Center, Central Logistics Hub, South Fulfillment Yard.
-5. `LocationEntity`: Hierarchical locations (Section -> Rack -> Shelf -> Bin).
-6. `ProductEntity`: SKU, Barcode, QR code, unit price, stock count, safety minimums, expiration date.
-7. `StockTransactionEntity`: Immutable double-entry ledger for Stock In, Stock Out, and Transfers.
-8. `AssetEntity`: Physical warehouse equipment (Forklifts, Pallet Jacks, Handheld Scanners, Scales).
-9. `AssetMovementEntity`: Historical asset reassignments and zone relocations.
-10. `SyncQueueEntity`: Offline queue with operation types (`CREATE`, `STOCK_IN`, `STOCK_OUT`, `TRANSFER`, `ASSET_MOVE`), idempotency tokens, and retry tracking.
-11. `AuditLogEntity`: Audit trail for compliance.
-12. `NotificationEntity`: Low stock and operational warnings.
-
-### Phase 6: Warehouse & Location Management (Completed)
-- Facility breakdown with total capacity and current occupancy metrics.
-- Hierarchical location model: `Warehouse` ➔ `Section` ➔ `Rack` ➔ `Shelf` ➔ `Bin Location`.
-- Location inspector answering: *"Where is Product X stored?"* and *"What assets are currently in Bin Y?"*.
-
-### Phase 7: Inventory Management & Transactions (Completed)
-- **Stock In:** Fast receipt logging, auto-updates Room quantity, logs immutable transaction, and queues sync event.
-- **Stock Out:** Enforces validation preventing negative stock (strictly throws if requested > available stock). Triggers automatic low-stock notifications if below threshold.
-- **Stock Transfer:** Validates source bin stock and moves items to destination bin or warehouse.
-- **Audit Logging:** Every operation records performer, reference code, timestamp, and entity affected.
-
-### Phase 8: QR & Barcode Scanning (Completed)
-- Camera scanner interface with laser reticle animation and flashlight toggle.
-- Fast emulator simulation shortcuts: One-tap barcodes for Casters, Labels, Forklift asset, Zebra scanner, and Bins.
-- Manual SKU/Barcode search field.
-- Scan result cards with direct transactional triggers ("Stock In", "Stock Out", "Move Asset").
-
-### Phase 9: Physical Asset Tracking & Movements (Completed)
-- Asset tracking separate from consumable stock (`AVAILABLE`, `IN_USE`, `ASSIGNED`, `UNDER_MAINTENANCE`).
-- Registration of new physical equipment assets.
-- Asset movement tracker recording employee reassignment, zone change, and maintenance notes.
-
-### Phase 10 & 11: Offline-First Synchronization & SyncQueue (Completed)
-- Room serves as the local source of truth; all write operations succeed offline immediately.
-- Offline simulation toggle in UI to simulate network outages and reconnections.
-- Idempotency keys generated per transaction (`TXN_<id>_<op>`) to prevent duplicate transactions on network retry.
-- Manual and automatic background sync queue execution.
-
-### Phase 12 & 13: Hardware Peripherals (Bluetooth & NFC) (Completed)
-- **Bluetooth Peripherals Manager:** Simulates paired barcode scanner terminals (Honeywell Voyager), mobile receipt printers (Zebra ZQ520), and industrial digital scales with live battery & signal indicators.
-- **NFC Tag Integration:** Contactless RFID/NFC tag reader simulation for instant asset identification.
-
-### Phase 14: Reports & Analytics (Completed)
-- Real-time catalog valuation ($).
-- Stock health distribution (In Stock vs Low Stock vs Out of Stock).
-- Category volume distribution and transaction turnover metrics.
+| Use Case # | Feature / Use Case | Status | Implementation Details |
+|:---|:---|:---:|:---|
+| **UC 1** | **Login and User Authentication** | Completed | Full login screen, session persistence, role verification (`ADMIN`, `WAREHOUSE_MANAGER`, `WAREHOUSE_EMPLOYEE`), role switcher, and remote auth verification. |
+| **UC 2** | **Product Management** | Completed | Master catalog CRUD, categories, suppliers, min stock thresholds, expiry dates, barcode/QR codes, and **warehouse item photos**. |
+| **UC 3** | **QR/Barcode Product Identification** | Completed | Camera viewfinder, laser scan animation, fast emulator test barcodes, direct action triggers: `[Stock In]`, `[Stock Out]`, `[Transfer]`, `[View History]`. |
+| **UC 4** | **Receiving Stock (Stock In)** | Completed | Delivery receipt, quantity validation, storage bin selection, PO reference, local Room stock update, and SyncQueue creation. |
+| **UC 5** | **Issuing/Removing Stock (Stock Out)** | Completed | Available stock check, strict prevention of negative stock balances, dispatch destination, audit record, and automatic low-stock notifications. |
+| **UC 6** | **Stock Transfer** | Completed | Inter-bin and inter-warehouse relocations with lifecycle statuses: `PENDING`, `APPROVED`, `IN_TRANSIT`, `COMPLETED`, `CANCELLED`. |
+| **UC 7** | **Finding a Product (Bin Finder)** | Completed | Search by Name, SKU, Barcode, QR code. Displays exact facility, Section, Rack, Shelf, Bin, and quantity. |
+| **UC 8** | **Warehouse & Location Management** | Completed | Physical hierarchy model: `Warehouse` ➔ `Section` ➔ `Rack` ➔ `Shelf` ➔ `Storage Location (Bin)`. Bin occupancy inspector. |
+| **UC 9** | **Asset Management** | Completed | Physical equipment tracking (Forklifts, Pallet trucks, Handheld Scanners, Label Printers, Scales) with **asset photo images**. |
+| **UC 10** | **Asset Assignment** | Completed | Assigns responsibility to warehouse employees with date, location, condition, and status (`AVAILABLE`, `ASSIGNED`, `IN_USE`, `UNDER_MAINTENANCE`). |
+| **UC 11** | **Asset Movement Tracking** | Completed | Immutable chronological trail of asset relocations (e.g., 08:30 Section B ➔ 11:15 Section C ➔ 14:30 Maintenance). |
+| **UC 12** | **NFC Asset Identification** | Completed | Contactless RFID/NFC tag reader simulation for instant equipment identification and operations. |
+| **UC 13** | **Bluetooth Devices** | Completed | Isolated Bluetooth manager connecting to paired laser ring scanners, mobile label printers, and forklift scales with battery telemetry. |
+| **UC 14** | **Low Stock Detection** | Completed | Monitors safety threshold (`quantity <= minimumStockLevel`), triggers badges, alerts banner, and notifications. |
+| **UC 15** | **Expiry Monitoring** | Completed | Monitors expiration dates on chemicals and batteries, displaying expiring counts on dashboard and notifications. |
+| **UC 16** | **Notifications** | Completed | Categorized operational alerts: Low stock, Expiry warnings, Transfer approvals, Sync failures, and Announcements. |
+| **UC 17** | **Offline Operation** | Completed | Fully offline-first: Operations immediately write to Room SQLite DB and queue into `SyncQueue` with idempotency keys. |
+| **UC 18** | **Synchronization** | Completed | Keeps local Room and central server consistent. Offline simulation toggle and manual "Sync Now" trigger with retry logic. |
+| **UC 19** | **Role-Customized Dashboard** | Completed | Dynamic dashboards: Employee (Scan, Stock, Assets, Find, History), Manager (Approvals, Transfers, Assets, Reports), Admin (Users, Catalog, Warehouses, Settings). |
+| **UC 20** | **Reports & Analytics** | Completed | Financial valuation ($), Stock health breakdown, Category volume distribution, and transaction turnover summary. |
+| **UC 21** | **Transaction History** | Completed | Double-entry chronological audit ledger for Stock In, Stock Out, and Transfers with filter pills and sync tags. |
+| **UC 22** | **Audit Logging** | Completed | Administrative and operational event logging: `USER_CREATED`, `ROLE_CHANGED`, `PRODUCT_CREATED`, `STOCK_IN`, `STOCK_OUT`, `STOCK_TRANSFER`, `LOGIN`. |
+| **UC 23** | **User Management** | Completed | Admin console: Create users, assign roles, toggle active/deactivated status, and view assignments. |
+| **UC 24-27**| **Complete Shipment & Movement Workflows** | Completed | Step-by-step shipment receiving and asset relocation workflows executed end-to-end. |
+| **Photos & Media** | **Warehouse Items & Assets Photos** | Completed | **Android Photo Picker** (`PickVisualMedia`) for device gallery photos, **Live Camera Capture**, **Interactive Fullscreen Image Viewer** (`ImageViewerDialog`), and industrial preset photo library. |
 
 ---
 
-## 3. Architecture Checklist
+## 2. Design System: Colorful Minimalism
 
-| Component | Status | Notes |
-|:---|:---:|:---|
-| Kotlin + Jetpack Compose | Completed | Clean declarative UI |
-| Material Design 3 Minimalist | Completed | Muted palette, rounded corners |
-| MVVM + Repository Pattern | Completed | Clear separation of concerns |
-| Room SQLite Database | Completed | 12 entities, 6 DAOs, initial seed data |
-| Offline-First SyncQueue | Completed | Idempotent transaction queues |
-| Camera & Barcode Scanner | Completed | Viewfinder, emulator test codes |
-| Bluetooth / NFC Layer | Completed | Peripheral abstraction managers |
-| Audit Trail & Logging | Completed | Every action logged |
-| Mandatory Code Comments | Completed | All classes, DAOs, and methods documented |
+The application strikes a balance between **clean, uncluttered minimalism** and **rich, colorful feedback**:
+- **Geometry:** Universal rounded corners across cards (`16.dp` & `20.dp`), pill chips (`50`), and input fields.
+- **Vibrant Accent Palette:**
+  - **Emerald Green (`#059669`, `#10B981`):** Stock-In receipts, healthy inventory, in-stock badges.
+  - **Royal Indigo (`#4F46E5`, `#6366F1`):** Product catalog, primary actions, and administrator modules.
+  - **Electric Violet (`#7C3AED`, `#8B5CF6`):** Physical equipment assets, NFC tags, and mobile hardware.
+  - **Cyan Ocean (`#0891B2`, `#06B6D4`):** Storage locations, racks, shelves, and bin finder.
+  - **Vivid Amber (`#D97706`, `#F59E0B`):** Low stock warnings, pending transfer approvals, and expiry alerts.
+  - **Radiant Rose (`#E11D48`, `#F43F5E`):** Stock-out dispatches, negative stock prevention, and critical alerts.
 
 ---
 
-## 4. Next Milestone Roadmap
+## 3. Remote Data Source & Server Integration
 
-1. **Spring Boot Backend (`backend/`):**
-   - Java 21 / Spring Boot 3 REST controller endpoints matching the Android DTOs.
-   - Spring Data JPA entities and MySQL migration scripts.
-   - Idempotent transaction endpoints handling `SyncQueue` requests.
-2. **DevOps & Docker (`docker/`):**
-   - `docker-compose.yml` orchestrating Spring Boot, MySQL 8, and Reverse Proxy.
-3. **CI/CD Pipeline (`.github/workflows/`):**
-   - Automated unit test runner and build verification.
+- **Backend Architecture:** Spring Boot REST endpoints (`WarehouseApiService`) + MySQL database model + Firebase Cloud sync integration.
+- **Network Stack:** Retrofit 2 + OkHttp 3 with logging interceptor, Moshi JSON converters, and configurable endpoint provider (`NetworkClient`).
+- **Endpoint Connectivity Testing:** Settings features a live "Test Connection" ping action displaying HTTP status, server responsiveness, and roundtrip latency.
+- **Offline Sync Layer:** Room `sync_queue` storing queued JSON payloads with unique idempotency keys (`TXN_<id>_<type>`) ensuring zero duplicate stock updates upon connection recovery.
+
+---
+
+## 4. Hardware Integrations
+
+- **Barcode/QR Scanner:** Camera viewfinder with targeting reticle and instant barcode detection triggers.
+- **Bluetooth Peripherals:** Manager for wireless ring barcode scanners, mobile belt label printers, and digital forklift pallet scales with live battery percentages.
+- **NFC Asset Tagging:** Contactless RFID/NFC tag scanning and tag verification for equipment relocation and inspection.

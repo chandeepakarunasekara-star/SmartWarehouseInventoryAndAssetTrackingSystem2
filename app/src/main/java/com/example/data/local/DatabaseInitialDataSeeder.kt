@@ -17,7 +17,8 @@ import com.example.domain.model.TransactionType
 import com.example.domain.model.UserRole
 
 /**
- * Seeds comprehensive initial enterprise data for demo, testing, and offline verification.
+ * Seeds comprehensive initial enterprise data according to the Smart Warehouse specification,
+ * including photos, user accounts, hierarchical bins, assets, and transactions.
  */
 object DatabaseInitialDataSeeder {
     suspend fun seedInitialData(database: AppDatabase) {
@@ -27,7 +28,7 @@ object DatabaseInitialDataSeeder {
         val assetDao = database.assetDao()
         val transactionDao = database.stockTransactionDao()
 
-        // 1. Users
+        // 1. Users with distinct role hierarchies
         val users = listOf(
             UserEntity(
                 userId = "USR-001",
@@ -35,7 +36,8 @@ object DatabaseInitialDataSeeder {
                 fullName = "Sarah Jenkins",
                 email = "s.jenkins@smartwarehouse.net",
                 role = UserRole.ADMIN,
-                warehouseAssignedId = "WH-NORTH"
+                warehouseAssignedId = "WH-NORTH",
+                isActive = true
             ),
             UserEntity(
                 userId = "USR-002",
@@ -43,15 +45,26 @@ object DatabaseInitialDataSeeder {
                 fullName = "David Vance",
                 email = "d.vance@smartwarehouse.net",
                 role = UserRole.WAREHOUSE_MANAGER,
-                warehouseAssignedId = "WH-NORTH"
+                warehouseAssignedId = "WH-NORTH",
+                isActive = true
             ),
             UserEntity(
                 userId = "USR-003",
-                username = "emp_marcus",
-                fullName = "Marcus Cole",
+                username = "emp_104",
+                fullName = "Employee 104 (Marcus)",
                 email = "m.cole@smartwarehouse.net",
                 role = UserRole.WAREHOUSE_EMPLOYEE,
-                warehouseAssignedId = "WH-NORTH"
+                warehouseAssignedId = "WH-NORTH",
+                isActive = true
+            ),
+            UserEntity(
+                userId = "USR-004",
+                username = "emp_alex",
+                fullName = "Alex Rivera",
+                email = "a.rivera@smartwarehouse.net",
+                role = UserRole.WAREHOUSE_EMPLOYEE,
+                warehouseAssignedId = "WH-CENTRAL",
+                isActive = true
             )
         )
         userDao.insertUsers(users)
@@ -60,24 +73,24 @@ object DatabaseInitialDataSeeder {
         val warehouses = listOf(
             WarehouseEntity(
                 warehouseId = "WH-NORTH",
-                name = "North Distribution Center",
-                code = "NDC-01",
-                address = "104 Logistics Blvd, Industrial Zone A",
+                name = "Warehouse A (North Distribution)",
+                code = "WH-A",
+                address = "104 Logistics Blvd, Industrial Sector 4",
                 totalCapacityUnits = 25000,
                 managerName = "David Vance"
             ),
             WarehouseEntity(
                 warehouseId = "WH-CENTRAL",
-                name = "Central Logistics Hub",
-                code = "CLH-02",
-                address = "520 Parkway Interchange, Sector 7",
+                name = "Warehouse B (Central Logistics)",
+                code = "WH-B",
+                address = "520 Parkway Interchange, Hub 7",
                 totalCapacityUnits = 50000,
                 managerName = "Elena Rostova"
             ),
             WarehouseEntity(
                 warehouseId = "WH-SOUTH",
-                name = "South Port Fulfillment Yard",
-                code = "SPF-03",
+                name = "Warehouse C (South Terminal)",
+                code = "WH-C",
                 address = "88 Harbor Terminal Pier, Dock 12",
                 totalCapacityUnits = 32000,
                 managerName = "Kofi Mensah"
@@ -85,228 +98,220 @@ object DatabaseInitialDataSeeder {
         )
         warehouseDao.insertWarehouses(warehouses)
 
-        // 3. Hierarchical Storage Locations
+        // 3. Hierarchical Storage Locations: Warehouse -> Section -> Rack -> Shelf -> Bin
         val locations = listOf(
-            LocationEntity("LOC-WH1-A11", "WH-NORTH", "A", "R01", "S01", "BIN-A01", 500, 320),
-            LocationEntity("LOC-WH1-A12", "WH-NORTH", "A", "R01", "S02", "BIN-A02", 500, 180),
-            LocationEntity("LOC-WH1-B21", "WH-NORTH", "B", "R02", "S01", "BIN-B01", 800, 640),
-            LocationEntity("LOC-WH1-B22", "WH-NORTH", "B", "R02", "S02", "BIN-B02", 800, 210),
-            LocationEntity("LOC-WH1-C31", "WH-NORTH", "C", "R03", "S01", "BIN-C01", 1200, 890),
-            LocationEntity("LOC-WH1-D41", "WH-NORTH", "D", "R04", "S01", "BIN-D01", 600, 50),
-            LocationEntity("LOC-WH2-A11", "WH-CENTRAL", "A", "R01", "S01", "BIN-01", 1000, 450),
-            LocationEntity("LOC-WH2-B11", "WH-CENTRAL", "B", "R01", "S01", "BIN-02", 1000, 720)
+            LocationEntity("LOC-WHA-B-R03-S02", "WH-NORTH", "B", "03", "02", "BIN-B03-2", 600, 245),
+            LocationEntity("LOC-WHA-B-R04-S02", "WH-NORTH", "B", "04", "02", "BIN-B04-2", 800, 500),
+            LocationEntity("LOC-WHA-C-R01-S05", "WH-NORTH", "C", "01", "05", "BIN-C01-5", 750, 180),
+            LocationEntity("LOC-WHA-A-R01-S01", "WH-NORTH", "A", "01", "01", "BIN-A01-1", 500, 320),
+            LocationEntity("LOC-WHA-A-R02-S03", "WH-NORTH", "A", "02", "03", "BIN-A02-3", 500, 142),
+            LocationEntity("LOC-WHA-D-R01-S01", "WH-NORTH", "D", "01", "01", "BIN-D01-1", 400, 50),
+            LocationEntity("LOC-WHB-A-R01-S01", "WH-CENTRAL", "A", "01", "01", "BIN-CENT-01", 1000, 620)
         )
         warehouseDao.insertLocations(locations)
 
         // 4. Categories
         val categories = listOf(
-            CategoryEntity("CAT-01", "Industrial Hardware", "IND-HW", "Heavy mechanical fittings, casters, fasteners"),
-            CategoryEntity("CAT-02", "Electronics & IoT", "ELEC-IOT", "Scanners, RFID readers, telemetry sensors"),
-            CategoryEntity("CAT-03", "Packaging & Materials", "PKG-MAT", "Label rolls, corrugated boxes, shrink wrap"),
-            CategoryEntity("CAT-04", "Heavy Batteries & Energy", "BAT-NRG", "Forklift cells, charging packs, invertors"),
-            CategoryEntity("CAT-05", "Safety & PPE", "PPE-SAF", "Hard hats, safety vests, eye protection")
+            CategoryEntity("CAT-01", "Electronics & Computing", "ELEC", "Laptops, chargers, barcode terminals, accessories"),
+            CategoryEntity("CAT-02", "Industrial Hardware", "IND-HW", "Fittings, casters, steel bearings, tools"),
+            CategoryEntity("CAT-03", "Packaging & Dispatch", "PKG-MAT", "Label rolls, tape, corrugated shipping supplies"),
+            CategoryEntity("CAT-04", "Heavy Batteries & Power", "BAT-NRG", "Forklift cells, charging packs, invertors"),
+            CategoryEntity("CAT-05", "Chemicals & Solvents", "CHM-SOLV", "Industrial cleaners, lubricants, solvents")
         )
         warehouseDao.insertCategories(categories)
 
         // 5. Suppliers
         val suppliers = listOf(
-            SupplierEntity("SUP-01", "Apex Heavy Logistics", "Robert King", "sales@apexlogistics.com", "+1-800-555-0199", "Detroit, MI"),
-            SupplierEntity("SUP-02", "Titan Industrial Supplies", "Maria Diaz", "orders@titansupply.com", "+1-800-555-0245", "Chicago, IL"),
-            SupplierEntity("SUP-03", "NexGen Microcircuits", "Kenji Sato", "b2b@nexgen-elec.com", "+1-800-555-0371", "San Jose, CA")
+            SupplierEntity("SUP-01", "ABC Suppliers Ltd", "Thomas Bradley", "orders@abcsuppliers.com", "+1-800-555-0100", "Chicago, IL"),
+            SupplierEntity("SUP-02", "Apex Heavy Logistics", "Robert King", "sales@apexlogistics.com", "+1-800-555-0199", "Detroit, MI"),
+            SupplierEntity("SUP-03", "Titan Industrial Supplies", "Maria Diaz", "orders@titansupply.com", "+1-800-555-0245", "Houston, TX")
         )
         warehouseDao.insertSuppliers(suppliers)
 
-        // 6. Products Master Catalog
+        // 6. Products Master Catalog with Photos & Specifications from PDF
         val products = listOf(
             ProductEntity(
-                productId = "PRD-001",
-                sku = "HD-WHL-882",
+                productId = "PRD-00125",
+                sku = "CHG-100",
                 barcode = "78912345601",
-                qrCode = "PRD-HD-WHL-882",
-                name = "Heavy-Duty Pallet Caster Wheels",
-                description = "Polyurethane 8-inch steel bearing swivel wheels for heavy pallet transport.",
+                qrCode = "PRD-CHG-100",
+                name = "Laptop Charger 65W USB-C",
+                description = "Universal fast-charging warehouse terminal and rugged laptop AC power supply.",
                 categoryId = "CAT-01",
                 supplierId = "SUP-01",
-                unitPrice = 45.50,
-                quantity = 142,
-                minimumStockLevel = 40,
-                expiryDate = "2029-12-31",
-                locationId = "LOC-WH1-A11",
-                warehouseId = "WH-NORTH"
+                unitPrice = 34.50,
+                quantity = 45,
+                minimumStockLevel = 20,
+                expiryDate = "2030-12-31",
+                locationId = "LOC-WHA-B-R03-S02",
+                warehouseId = "WH-NORTH",
+                imageUrl = "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?auto=format&fit=crop&w=400&q=80"
             ),
             ProductEntity(
-                productId = "PRD-002",
-                sku = "BCD-TRM-401",
+                productId = "PRD-00500",
+                sku = "LAP-100",
                 barcode = "78912345602",
-                qrCode = "PRD-BCD-TRM-401",
-                name = "Industrial 2D Barcode Scanner Terminals",
-                description = "Ruggedized Android handheld imager with long-range laser autofocus.",
-                categoryId = "CAT-02",
-                supplierId = "SUP-03",
-                unitPrice = 420.00,
-                quantity = 18,
-                minimumStockLevel = 25, // Low stock triggered!
-                expiryDate = "2031-06-15",
-                locationId = "LOC-WH1-A12",
-                warehouseId = "WH-NORTH"
+                qrCode = "PRD-LAP-100",
+                name = "Rugged Enterprise Laptop 15-inch",
+                description = "Drop-resistant IP65 warehouse logistics supervisor terminal.",
+                categoryId = "CAT-01",
+                supplierId = "SUP-01",
+                unitPrice = 850.00,
+                quantity = 100, // Stock in shipment demo
+                minimumStockLevel = 50,
+                expiryDate = "2032-05-20",
+                locationId = "LOC-WHA-B-R04-S02",
+                warehouseId = "WH-NORTH",
+                imageUrl = "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=400&q=80"
             ),
             ProductEntity(
-                productId = "PRD-003",
-                sku = "LBL-THM-100",
+                productId = "PRD-00012",
+                sku = "USB-CBL-01",
                 barcode = "78912345603",
+                qrCode = "PRD-USB-CBL-01",
+                name = "High-Durability USB Cable 2M",
+                description = "Braided high-current data transfer and mobile scanner sync cables.",
+                categoryId = "CAT-01",
+                supplierId = "SUP-01",
+                unitPrice = 8.50,
+                quantity = 12, // LOW STOCK (12 < 20)
+                minimumStockLevel = 20,
+                expiryDate = "2031-10-15",
+                locationId = "LOC-WHA-A-R01-S01",
+                warehouseId = "WH-NORTH",
+                imageUrl = "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=400&q=80"
+            ),
+            ProductEntity(
+                productId = "PRD-00099",
+                sku = "CHM-SOLV-X",
+                barcode = "78912345604",
+                qrCode = "PRD-CHM-SOLV-X",
+                name = "Industrial Chemical Cleaner X",
+                description = "Heavy degreasing formulation for industrial rollers and belts.",
+                categoryId = "CAT-05",
+                supplierId = "SUP-03",
+                unitPrice = 62.00,
+                quantity = 28,
+                minimumStockLevel = 10,
+                expiryDate = "2026-11-05", // Approaching Expiry!
+                locationId = "LOC-WHA-D-R01-S01",
+                warehouseId = "WH-NORTH",
+                imageUrl = "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=400&q=80"
+            ),
+            ProductEntity(
+                productId = "PRD-00201",
+                sku = "LBL-THM-100",
+                barcode = "78912345605",
                 qrCode = "PRD-LBL-THM-100",
-                name = "Thermal Shipping Label Rolls 4x6 (Pack 6)",
-                description = "Direct thermal perforated permanent adhesive label rolls for dispatch.",
+                name = "Thermal Shipping Label Rolls 4x6",
+                description = "High-speed thermal transfer self-adhesive labels for package dispatch.",
                 categoryId = "CAT-03",
                 supplierId = "SUP-02",
-                unitPrice = 28.00,
-                quantity = 8, // Very low stock
-                minimumStockLevel = 30,
+                unitPrice = 24.00,
+                quantity = 15, // LOW STOCK
+                minimumStockLevel = 40,
                 expiryDate = "2027-04-10",
-                locationId = "LOC-WH1-B21",
-                warehouseId = "WH-NORTH"
-            ),
-            ProductEntity(
-                productId = "PRD-004",
-                sku = "BAT-LION-50",
-                barcode = "78912345604",
-                qrCode = "PRD-BAT-LION-50",
-                name = "Lithium-Ion Forklift Battery 48V",
-                description = "Heavy rapid-charge industrial cell pack with smart telemetry BMS module.",
-                categoryId = "CAT-04",
-                supplierId = "SUP-01",
-                unitPrice = 2850.00,
-                quantity = 12,
-                minimumStockLevel = 5,
-                expiryDate = "2032-01-01",
-                locationId = "LOC-WH1-C31",
-                warehouseId = "WH-NORTH"
-            ),
-            ProductEntity(
-                productId = "PRD-005",
-                sku = "RFID-TAG-500",
-                barcode = "78912345605",
-                qrCode = "PRD-RFID-TAG-500",
-                name = "UHF Gen2 RFID Asset Tracking Tags",
-                description = "Mount-on-metal durable RFID chips for pallet and container tracking.",
-                categoryId = "CAT-02",
-                supplierId = "SUP-03",
-                unitPrice = 110.00,
-                quantity = 85,
-                minimumStockLevel = 20,
-                expiryDate = "2035-12-31",
-                locationId = "LOC-WH1-B22",
-                warehouseId = "WH-NORTH"
-            ),
-            ProductEntity(
-                productId = "PRD-006",
-                sku = "PPE-HAT-YLW",
-                barcode = "78912345606",
-                qrCode = "PRD-PPE-HAT-YLW",
-                name = "High-Visibility Safety Hard Hats (Yellow)",
-                description = "ANSI Z89.1 certified ratchet suspension impact protective helmets.",
-                categoryId = "CAT-05",
-                supplierId = "SUP-02",
-                unitPrice = 19.95,
-                quantity = 210,
-                minimumStockLevel = 50,
-                expiryDate = "2028-11-20",
-                locationId = "LOC-WH1-D41",
-                warehouseId = "WH-NORTH"
+                locationId = "LOC-WHA-A-R02-S03",
+                warehouseId = "WH-NORTH",
+                imageUrl = "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=400&q=80"
             )
         )
         productDao.insertProducts(products)
 
-        // 7. Physical Assets
+        // 7. Physical Assets with Photos (from PDF page 9-10)
         val assets = listOf(
             AssetEntity(
-                assetId = "AST-001",
-                assetCode = "AST-FL-01",
-                name = "Toyota Electric Forklift 8FBE",
+                assetId = "AST-000245",
+                assetCode = "AST-000245",
+                name = "Electric Forklift Toyota 8FBE",
                 category = "Heavy Equipment",
-                serialNumber = "TY-8FBE-994821",
+                serialNumber = "FL-9821",
                 status = AssetStatus.AVAILABLE,
                 warehouseId = "WH-NORTH",
-                locationId = "LOC-WH1-A11",
-                assignedEmployeeName = "Unassigned",
+                locationId = "LOC-WHA-A-R01-S01",
+                assignedEmployeeName = "Employee 104 (Marcus)",
                 condition = "Excellent",
                 purchaseDate = "2023-03-15",
                 lastInspectionDate = "2026-09-10",
-                nfcTagId = "NFC-AST-001"
+                nfcTagId = "NFC-AST-000245",
+                imageUrl = "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=400&q=80"
             ),
             AssetEntity(
-                assetId = "AST-002",
+                assetId = "AST-000104",
                 assetCode = "AST-PJ-04",
-                name = "Crown Hydraulic Pallet Jack 5500lb",
-                category = "Material Handling",
-                serialNumber = "CR-PJ55-10492",
+                name = "Crown Hydraulic Pallet Truck 5500lb",
+                category = "Pallet Trucks",
+                serialNumber = "CR-PJ-1049",
                 status = AssetStatus.IN_USE,
                 warehouseId = "WH-NORTH",
-                locationId = "LOC-WH1-B21",
-                assignedEmployeeName = "Marcus Cole",
+                locationId = "LOC-WHA-B-R03-S02",
+                assignedEmployeeName = "Employee 104 (Marcus)",
                 condition = "Good",
                 purchaseDate = "2024-01-20",
                 lastInspectionDate = "2026-08-25",
-                nfcTagId = "NFC-AST-002"
+                nfcTagId = "NFC-AST-PJ04",
+                imageUrl = "https://images.unsplash.com/photo-1580674684081-7617fbf3d745?auto=format&fit=crop&w=400&q=80"
             ),
             AssetEntity(
-                assetId = "AST-003",
+                assetId = "AST-000301",
                 assetCode = "AST-SC-12",
                 name = "Zebra TC52 Handheld Barcode Scanner",
-                category = "IT & Scanners",
-                serialNumber = "ZB-TC52-881923",
+                category = "Scanners",
+                serialNumber = "ZB-TC52-8819",
                 status = AssetStatus.ASSIGNED,
                 warehouseId = "WH-NORTH",
-                locationId = "LOC-WH1-A12",
-                assignedEmployeeName = "Marcus Cole",
-                condition = "Good",
+                locationId = "LOC-WHA-A-R02-S03",
+                assignedEmployeeName = "Employee 104 (Marcus)",
+                condition = "Calibrated",
                 purchaseDate = "2025-05-11",
                 lastInspectionDate = "2026-10-01",
-                nfcTagId = "NFC-AST-003"
+                nfcTagId = "NFC-AST-SC12",
+                imageUrl = "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=400&q=80"
             ),
             AssetEntity(
-                assetId = "AST-004",
-                assetCode = "AST-SCL-02",
-                name = "Fairbanks Industrial Platform Scale 1000kg",
-                category = "Inspection & Weighing",
-                serialNumber = "FB-1000-44910",
-                status = AssetStatus.UNDER_MAINTENANCE,
+                assetId = "AST-000405",
+                assetCode = "AST-PR-02",
+                name = "Zebra Industrial Label Printer ZT411",
+                category = "Printers",
+                serialNumber = "ZB-PR-41102",
+                status = AssetStatus.AVAILABLE,
                 warehouseId = "WH-NORTH",
-                locationId = "LOC-WH1-D41",
-                assignedEmployeeName = "Maintenance Crew",
-                condition = "Calibration Pending",
-                purchaseDate = "2022-11-04",
-                lastInspectionDate = "2026-10-12",
-                nfcTagId = "NFC-AST-004"
+                locationId = "LOC-WHA-A-R02-S03",
+                assignedEmployeeName = "Unassigned",
+                condition = "Good",
+                purchaseDate = "2024-09-18",
+                lastInspectionDate = "2026-09-30",
+                nfcTagId = "NFC-AST-PR02",
+                imageUrl = "https://images.unsplash.com/photo-1612815154858-60aa4c59eaa6?auto=format&fit=crop&w=400&q=80"
             )
         )
         assetDao.insertAssets(assets)
 
-        // 8. Asset Movements
+        // 8. Asset Movement History Timeline (as specified in PDF page 10)
         val movements = listOf(
             AssetMovementEntity(
                 movementId = "MOV-001",
-                assetId = "AST-002",
-                assetName = "Crown Hydraulic Pallet Jack 5500lb",
-                fromLocationId = "LOC-WH1-A11",
-                toLocationId = "LOC-WH1-B21",
+                assetId = "AST-000245",
+                assetName = "Electric Forklift Toyota 8FBE",
+                fromLocationId = "LOC-WHA-A-R01-S01",
+                toLocationId = "LOC-WHA-B-R03-S02",
                 previousEmployee = "Sarah Jenkins",
-                newEmployee = "Marcus Cole",
+                newEmployee = "Employee 104 (Marcus)",
                 movementType = "Shift Assignment",
-                performedBy = "David Vance",
-                notes = "Assigned for Section B freight unload."
+                performedBy = "David Vance (Manager)",
+                notes = "08:30 Shift Start: Transferred to Section B for pallet unloading."
             ),
             AssetMovementEntity(
                 movementId = "MOV-002",
-                assetId = "AST-004",
-                assetName = "Fairbanks Industrial Platform Scale 1000kg",
-                fromLocationId = "LOC-WH1-B22",
-                toLocationId = "LOC-WH1-D41",
-                previousEmployee = "Warehouse Floor",
-                newEmployee = "Maintenance Crew",
-                movementType = "Maintenance Relocation",
-                performedBy = "David Vance",
-                notes = "Scheduled bi-annual load sensor recalibration."
+                assetId = "AST-000245",
+                assetName = "Electric Forklift Toyota 8FBE",
+                fromLocationId = "LOC-WHA-B-R03-S02",
+                toLocationId = "LOC-WHA-C-R01-S05",
+                previousEmployee = "Employee 104 (Marcus)",
+                newEmployee = "Employee 104 (Marcus)",
+                movementType = "Zone Relocation",
+                performedBy = "Employee 104 (Marcus)",
+                notes = "11:15 Relocated to Warehouse A / Section C for dispatch staging."
             )
         )
         movements.forEach { assetDao.insertMovement(it) }
@@ -314,86 +319,98 @@ object DatabaseInitialDataSeeder {
         // 9. Initial Transactions
         val transactions = listOf(
             StockTransactionEntity(
-                transactionId = "TXN-9001",
-                productId = "PRD-001",
-                productName = "Heavy-Duty Pallet Caster Wheels",
+                transactionId = "TXN-1001",
+                productId = "PRD-00125",
+                productName = "Laptop Charger 65W USB-C",
                 transactionType = TransactionType.STOCK_IN,
-                quantity = 50,
-                sourceLocationId = "SUPPLIER-APEX",
-                destinationLocationId = "LOC-WH1-A11",
+                quantity = 100,
+                sourceLocationId = "ABC Suppliers Delivery",
+                destinationLocationId = "LOC-WHA-B-R03-S02",
                 performedByUserId = "USR-003",
-                performedByUserName = "Marcus Cole",
-                referenceNumber = "PO-APEX-8841",
-                notes = "Received standard container delivery, passed QA check.",
+                performedByUserName = "Employee 104",
+                referenceNumber = "PO-ABC-2026",
+                notes = "Shipment received and verified.",
+                transferStatus = "COMPLETED",
                 syncStatus = SyncStatus.SYNCED
             ),
             StockTransactionEntity(
-                transactionId = "TXN-9002",
-                productId = "PRD-003",
-                productName = "Thermal Shipping Label Rolls 4x6 (Pack 6)",
+                transactionId = "TXN-1002",
+                productId = "PRD-00125",
+                productName = "Laptop Charger 65W USB-C",
                 transactionType = TransactionType.STOCK_OUT,
-                quantity = 12,
-                sourceLocationId = "LOC-WH1-B21",
-                destinationLocationId = "DISPATCH-BAY-3",
+                quantity = 15,
+                sourceLocationId = "LOC-WHA-B-R03-S02",
+                destinationLocationId = "Dispatch Bay 3",
                 performedByUserId = "USR-003",
-                performedByUserName = "Marcus Cole",
-                referenceNumber = "DISP-2026-104",
-                notes = "Dispatched to outbound packaging line 3.",
+                performedByUserName = "Employee 104",
+                referenceNumber = "DISP-8821",
+                notes = "Dispatched to Retail Store #4.",
+                transferStatus = "COMPLETED",
                 syncStatus = SyncStatus.SYNCED
             ),
             StockTransactionEntity(
-                transactionId = "TXN-9003",
-                productId = "PRD-005",
-                productName = "UHF Gen2 RFID Asset Tracking Tags",
+                transactionId = "TXN-1003",
+                productId = "PRD-00125",
+                productName = "Laptop Charger 65W USB-C",
                 transactionType = TransactionType.STOCK_TRANSFER,
-                quantity = 25,
-                sourceLocationId = "LOC-WH1-B21",
-                destinationLocationId = "LOC-WH1-B22",
+                quantity = 20,
+                sourceLocationId = "LOC-WHA-B-R04-S02",
+                destinationLocationId = "LOC-WHA-C-R01-S05",
                 performedByUserId = "USR-002",
-                performedByUserName = "David Vance",
-                referenceNumber = "XFR-2026-089",
-                notes = "Relocated to secure RFID bin.",
+                performedByUserName = "David Vance (Manager)",
+                referenceNumber = "XFR-2026-04",
+                notes = "Transfer from Section B to Section C.",
+                transferStatus = "PENDING", // PENDING TRANSFER APPROVAL
+                requestedBy = "Employee 104",
+                approvedBy = "David Vance",
                 syncStatus = SyncStatus.SYNCED
             )
         )
         transactionDao.insertTransactions(transactions)
 
-        // 10. Notifications
+        // 10. Notifications from PDF page 13
         val notifications = listOf(
             NotificationEntity(
                 notificationId = "NTF-01",
-                title = "Critical Low Stock Alert",
-                message = "Thermal Shipping Label Rolls (SKU: LBL-THM-100) has dropped to 8 units (Threshold: 30). Reorder recommended.",
+                title = "⚠ Low Stock Detected",
+                message = "USB Cable (SKU: USB-CBL-01) stock is at 12 units (Minimum: 20). Replenishment required.",
                 type = "LOW_STOCK",
-                referenceId = "PRD-003"
+                referenceId = "PRD-00012"
             ),
             NotificationEntity(
                 notificationId = "NTF-02",
-                title = "Hardware Calibration Warning",
-                message = "Platform Scale (AST-SCL-02) is currently under maintenance at Section D.",
-                type = "ASSET_ALERT",
-                referenceId = "AST-004"
+                title = "⚠ Expiry Warning: Chemical X",
+                message = "Industrial Chemical Cleaner X expires on 05/10/2026. Please inspect inventory lot.",
+                type = "EXPIRY",
+                referenceId = "PRD-00099"
             ),
             NotificationEntity(
                 notificationId = "NTF-03",
-                title = "Transfer Order Approved",
-                message = "Stock transfer XFR-2026-089 for 25 RFID tags completed successfully.",
+                title = "Stock Transfer Approval Required",
+                message = "Transfer XFR-2026-04 for 20 Laptop Chargers from Sec B to Sec C requires Manager approval.",
                 type = "TRANSFER",
-                referenceId = "TXN-9003"
+                referenceId = "TXN-1003"
+            ),
+            NotificationEntity(
+                notificationId = "NTF-04",
+                title = "Warehouse Announcement",
+                message = "Annual inventory cycle count begins this Friday. Ensure all mobile scanners are calibrated.",
+                type = "ANNOUNCEMENT",
+                referenceId = "SYSTEM"
             )
         )
         userDao.insertNotifications(notifications)
 
-        // 11. Initial Audit Log
+        // 11. Initial Audit Log from PDF page 16-17
         userDao.insertAuditLog(
             AuditLogEntity(
                 eventId = "EVT-001",
                 userId = "USR-001",
-                userName = "Sarah Jenkins",
-                eventType = "SYSTEM_INITIALIZED",
-                entityType = "DATABASE",
-                entityId = "smart_warehouse.db",
-                details = "Master catalog, warehouse hierarchy, and user roles initialized."
+                userName = "Admin01 (Sarah)",
+                eventType = "PRODUCT_CREATED",
+                entityType = "PRODUCT",
+                entityId = "PRD-00125",
+                details = "Product Laptop Charger created with SKU CHG-100."
             )
         )
     }

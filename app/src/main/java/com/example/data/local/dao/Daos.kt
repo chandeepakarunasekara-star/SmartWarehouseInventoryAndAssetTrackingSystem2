@@ -1,6 +1,7 @@
 package com.example.data.local.dao
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -17,6 +18,7 @@ import com.example.data.local.entity.SupplierEntity
 import com.example.data.local.entity.SyncQueueEntity
 import com.example.data.local.entity.UserEntity
 import com.example.data.local.entity.WarehouseEntity
+import com.example.domain.model.AssetStatus
 import com.example.domain.model.SyncStatus
 import kotlinx.coroutines.flow.Flow
 
@@ -37,8 +39,20 @@ interface ProductDao {
     @Query("SELECT * FROM products WHERE sku = :code OR barcode = :code OR qrCode = :code LIMIT 1")
     suspend fun findProductByCode(code: String): ProductEntity?
 
+    @Query("SELECT * FROM products WHERE (name LIKE '%' || :query || '%' OR sku LIKE '%' || :query || '%' OR barcode LIKE '%' || :query || '%') AND isActive = 1 ORDER BY name ASC")
+    fun searchProducts(query: String): Flow<List<ProductEntity>>
+
+    @Query("SELECT * FROM products WHERE locationId = :locationId AND isActive = 1 ORDER BY name ASC")
+    fun observeProductsByLocation(locationId: String): Flow<List<ProductEntity>>
+
+    @Query("SELECT * FROM products WHERE warehouseId = :warehouseId AND isActive = 1 ORDER BY name ASC")
+    fun observeProductsByWarehouse(warehouseId: String): Flow<List<ProductEntity>>
+
     @Query("SELECT * FROM products WHERE quantity <= minimumStockLevel AND isActive = 1")
     fun observeLowStockProducts(): Flow<List<ProductEntity>>
+
+    @Query("SELECT * FROM products WHERE expiryDate <= :thresholdDate AND isActive = 1 ORDER BY expiryDate ASC")
+    fun observeExpiringProducts(thresholdDate: String = "2028-01-01"): Flow<List<ProductEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertProduct(product: ProductEntity)
@@ -48,6 +62,12 @@ interface ProductDao {
 
     @Update
     suspend fun updateProduct(product: ProductEntity)
+
+    @Delete
+    suspend fun deleteProduct(product: ProductEntity)
+
+    @Query("DELETE FROM products WHERE productId = :productId")
+    suspend fun deleteProductById(productId: String)
 
     @Query("UPDATE products SET quantity = :newQuantity, updatedAt = :updatedAt WHERE productId = :productId")
     suspend fun updateProductStock(productId: String, newQuantity: Int, updatedAt: Long = System.currentTimeMillis())
@@ -71,6 +91,9 @@ interface WarehouseDao {
     suspend fun getWarehouseById(id: String): WarehouseEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWarehouse(warehouse: WarehouseEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWarehouses(warehouses: List<WarehouseEntity>)
 
     @Query("SELECT * FROM locations WHERE warehouseId = :warehouseId ORDER BY section, rack, shelf, binCode ASC")
@@ -81,6 +104,9 @@ interface WarehouseDao {
 
     @Query("SELECT * FROM locations WHERE locationId = :id")
     suspend fun getLocationById(id: String): LocationEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLocation(location: LocationEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLocations(locations: List<LocationEntity>)
@@ -109,6 +135,9 @@ interface StockTransactionDao {
     @Query("SELECT * FROM stock_transactions ORDER BY timestamp DESC LIMIT :limit")
     fun observeRecentTransactions(limit: Int = 10): Flow<List<StockTransactionEntity>>
 
+    @Query("SELECT * FROM stock_transactions WHERE transactionType = 'STOCK_TRANSFER' AND transferStatus = 'PENDING' ORDER BY timestamp DESC")
+    fun observePendingTransfers(): Flow<List<StockTransactionEntity>>
+
     @Query("SELECT * FROM stock_transactions WHERE productId = :productId ORDER BY timestamp DESC")
     fun observeTransactionsForProduct(productId: String): Flow<List<StockTransactionEntity>>
 
@@ -117,6 +146,9 @@ interface StockTransactionDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransactions(transactions: List<StockTransactionEntity>)
+
+    @Query("UPDATE stock_transactions SET transferStatus = :status, approvedBy = :approvedBy WHERE transactionId = :transactionId")
+    suspend fun updateTransferStatus(transactionId: String, status: String, approvedBy: String)
 
     @Query("UPDATE stock_transactions SET syncStatus = :status WHERE transactionId = :transactionId")
     suspend fun updateTransactionSyncStatus(transactionId: String, status: SyncStatus)
@@ -136,6 +168,18 @@ interface AssetDao {
     @Query("SELECT * FROM assets WHERE assetCode = :code OR nfcTagId = :code OR serialNumber = :code LIMIT 1")
     suspend fun findAssetByCode(code: String): AssetEntity?
 
+    @Query("SELECT * FROM assets WHERE (name LIKE '%' || :query || '%' OR assetCode LIKE '%' || :query || '%' OR serialNumber LIKE '%' || :query || '%' OR nfcTagId LIKE '%' || :query || '%') ORDER BY name ASC")
+    fun searchAssets(query: String): Flow<List<AssetEntity>>
+
+    @Query("SELECT * FROM assets WHERE status = :status ORDER BY name ASC")
+    fun observeAssetsByStatus(status: AssetStatus): Flow<List<AssetEntity>>
+
+    @Query("SELECT * FROM assets WHERE warehouseId = :warehouseId ORDER BY name ASC")
+    fun observeAssetsByWarehouse(warehouseId: String): Flow<List<AssetEntity>>
+
+    @Query("SELECT * FROM assets WHERE locationId = :locationId ORDER BY name ASC")
+    fun observeAssetsByLocation(locationId: String): Flow<List<AssetEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAsset(asset: AssetEntity)
 
@@ -144,6 +188,12 @@ interface AssetDao {
 
     @Update
     suspend fun updateAsset(asset: AssetEntity)
+
+    @Delete
+    suspend fun deleteAsset(asset: AssetEntity)
+
+    @Query("DELETE FROM assets WHERE assetId = :assetId")
+    suspend fun deleteAssetById(assetId: String)
 
     @Query("SELECT * FROM asset_movements WHERE assetId = :assetId ORDER BY timestamp DESC")
     fun observeMovementsForAsset(assetId: String): Flow<List<AssetMovementEntity>>
@@ -183,7 +233,7 @@ interface SyncQueueDao {
 }
 
 /**
- * Data Access Object for User sessions, Audit Logs, and Operational Notifications.
+ * Data Access Object for User sessions, User Administration, Audit Logs, and Operational Notifications.
  */
 @Dao
 interface UserDao {
@@ -197,7 +247,16 @@ interface UserDao {
     suspend fun findUserByUsername(username: String): UserEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertUser(user: UserEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUsers(users: List<UserEntity>)
+
+    @Update
+    suspend fun updateUser(user: UserEntity)
+
+    @Query("UPDATE users SET isActive = :isActive WHERE userId = :userId")
+    suspend fun setUserActive(userId: String, isActive: Boolean)
 
     // Audit logs
     @Query("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 100")

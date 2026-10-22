@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import com.example.domain.model.UserRole
 import com.example.ui.components.MinimalButton
 import com.example.ui.components.MinimalCard
+import com.example.ui.components.MinimalOutlinedButton
 import com.example.ui.theme.SageTeal
 import com.example.ui.theme.SageTealContainer
 import com.example.ui.theme.SageTealOnContainer
@@ -209,8 +210,12 @@ fun SettingsScreen(
             }
         }
 
-        // 4. Spring Boot REST Backend Configuration
+        // 4. Remote Data Source (Spring Boot REST Server & Cloud Sync)
         item {
+            val remoteUrlState by viewModel.remoteApiUrl.collectAsState()
+            val pingResult by viewModel.remotePingResult.collectAsState()
+            val isTesting by viewModel.isTestingConnection.collectAsState()
+
             MinimalCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
@@ -224,25 +229,60 @@ fun SettingsScreen(
                             modifier = Modifier.size(20.dp)
                         )
                         Text(
-                            text = "Spring Boot REST Server",
+                            text = "Remote Data Source (REST API / Cloud)",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = Slate900
                         )
                     }
 
+                    Text(
+                        text = "Configured endpoint for real-time synchronization, central database transactions, and user authentication:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate600
+                    )
+
                     OutlinedTextField(
                         value = backendApiUrl,
                         onValueChange = { backendApiUrl = it },
-                        label = { Text("API Base URL") },
+                        label = { Text("Spring Boot / Remote API Base URL") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
 
-                    MinimalButton(
-                        text = "Save Endpoint",
-                        onClick = { viewModel.showFeedback("Configured API URL: $backendApiUrl") }
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        MinimalButton(
+                            text = "Save Endpoint",
+                            onClick = { viewModel.updateRemoteApiUrl(backendApiUrl) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        MinimalOutlinedButton(
+                            text = if (isTesting) "Pinging..." else "Test Connection",
+                            onClick = { viewModel.testRemoteConnection() },
+                            enabled = !isTesting,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    if (pingResult != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (pingResult!!.contains("Online")) SageTealContainer else Slate100)
+                                .padding(10.dp)
+                        ) {
+                            Text(
+                                text = pingResult!!,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (pingResult!!.contains("Online")) SageTealOnContainer else Slate700
+                            )
+                        }
+                    }
                 }
             }
         }

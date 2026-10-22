@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.QrCode
@@ -39,23 +40,32 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.data.local.entity.ProductEntity
 import com.example.domain.model.StockLevelStatus
 import com.example.ui.components.AddProductDialog
+import com.example.ui.components.ImageViewerDialog
 import com.example.ui.components.MinimalCard
 import com.example.ui.components.MinimalOutlinedButton
 import com.example.ui.components.MinimalSearchBar
 import com.example.ui.components.StockInDialog
 import com.example.ui.components.StockOutDialog
 import com.example.ui.components.StockStatusBadge
-import com.example.ui.theme.SageTeal
-import com.example.ui.theme.SageTealContainer
-import com.example.ui.theme.SageTealOnContainer
+import com.example.ui.theme.EmeraldContainer
+import com.example.ui.theme.EmeraldOnContainer
+import com.example.ui.theme.EmeraldPrimary
+import com.example.ui.theme.IndigoContainer
+import com.example.ui.theme.IndigoOnContainer
+import com.example.ui.theme.IndigoPrimary
+import com.example.ui.theme.MutedCoral
+import com.example.ui.theme.RosePrimary
 import com.example.ui.theme.Slate100
+import com.example.ui.theme.Slate200
 import com.example.ui.theme.Slate400
 import com.example.ui.theme.Slate500
 import com.example.ui.theme.Slate600
@@ -65,7 +75,7 @@ import com.example.ui.viewmodel.WarehouseViewModel
 
 /**
  * Product Catalog management screen with search, category filtering,
- * stock status inspection, and direct stock adjustment triggers.
+ * photo visual rendering, stock status inspection, and direct stock adjustment triggers.
  */
 @Composable
 fun ProductListScreen(
@@ -84,6 +94,7 @@ fun ProductListScreen(
     var showAddProductDialog by remember { mutableStateOf(false) }
     var stockInTargetProduct by remember { mutableStateOf<ProductEntity?>(null) }
     var stockOutTargetProduct by remember { mutableStateOf<ProductEntity?>(null) }
+    var inspectingPhotoProduct by remember { mutableStateOf<ProductEntity?>(null) }
 
     Scaffold(
         modifier = modifier.fillMaxSize().testTag("products_screen"),
@@ -91,7 +102,7 @@ fun ProductListScreen(
             FloatingActionButton(
                 onClick = { showAddProductDialog = true },
                 shape = RoundedCornerShape(16.dp),
-                containerColor = MaterialTheme.colorScheme.primary,
+                containerColor = IndigoPrimary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.testTag("add_product_fab")
             ) {
@@ -108,7 +119,8 @@ fun ProductListScreen(
             Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 MinimalSearchBar(
                     query = searchQuery,
-                    onQueryChange = { viewModel.productSearchQuery.value = it }
+                    onQueryChange = { viewModel.productSearchQuery.value = it },
+                    placeholder = "Search Laptop Charger, SKU, barcode..."
                 )
             }
 
@@ -210,6 +222,7 @@ fun ProductListScreen(
                             product = product,
                             locationText = matchingLocation?.fullHierarchyPath ?: product.locationId,
                             stockStatus = stockStatus,
+                            onPhotoClick = { inspectingPhotoProduct = product },
                             onStockIn = { stockInTargetProduct = product },
                             onStockOut = { stockOutTargetProduct = product }
                         )
@@ -219,15 +232,27 @@ fun ProductListScreen(
         }
     }
 
-    // Add Product Dialog
+    // Interactive Photo Inspection Dialog
+    inspectingPhotoProduct?.let { prod ->
+        val loc = locations.find { it.locationId == prod.locationId }
+        ImageViewerDialog(
+            title = prod.name,
+            subtitle = "SKU: ${prod.sku} • Barcode: ${prod.barcode}",
+            imageUrl = prod.imageUrl,
+            badgeText = "Location: ${loc?.fullHierarchyPath ?: prod.locationId} • In Stock: ${prod.quantity} units ($${String.format(java.util.Locale.US, "%.2f", prod.unitPrice)}/ea)",
+            onDismiss = { inspectingPhotoProduct = null }
+        )
+    }
+
+    // Add Product Dialog with Photo URL support
     if (showAddProductDialog) {
         AddProductDialog(
             categories = categories,
             suppliers = suppliers,
             locations = locations,
             onDismiss = { showAddProductDialog = false },
-            onConfirm = { sku, barcode, name, desc, catId, supId, price, qty, minStock, locId, whId ->
-                viewModel.createProduct(sku, barcode, name, desc, catId, supId, price, qty, minStock, locId, whId)
+            onConfirm = { sku, barcode, name, desc, catId, supId, price, qty, minStock, locId, whId, img, exp ->
+                viewModel.createProduct(sku, barcode, name, desc, catId, supId, price, qty, minStock, locId, whId, img, exp)
                 showAddProductDialog = false
             }
         )
@@ -270,10 +295,10 @@ private fun FilterChipPill(
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
-            .background(if (isSelected) SageTealContainer else Slate100)
+            .background(if (isSelected) IndigoContainer else Slate100)
             .border(
                 1.dp,
-                if (isSelected) SageTeal else MaterialTheme.colorScheme.outline,
+                if (isSelected) IndigoPrimary else MaterialTheme.colorScheme.outline,
                 RoundedCornerShape(50)
             )
             .clickable { onClick() }
@@ -284,7 +309,7 @@ private fun FilterChipPill(
             text = label,
             fontSize = 12.sp,
             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (isSelected) SageTealOnContainer else Slate700
+            color = if (isSelected) IndigoOnContainer else Slate700
         )
     }
 }
@@ -294,32 +319,77 @@ private fun ProductItemCard(
     product: ProductEntity,
     locationText: String,
     stockStatus: StockLevelStatus,
+    onPhotoClick: () -> Unit,
     onStockIn: () -> Unit,
     onStockOut: () -> Unit
 ) {
     MinimalCard(modifier = Modifier.testTag("product_card_${product.sku}")) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Top row: Name & Stock Badge
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Top row: Photo, Name, SKU, and Stock Badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.Top
             ) {
+                // Product Photo / Thumbnail with tap-to-inspect
+                Box(
+                    modifier = Modifier
+                        .size(68.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Slate100)
+                        .border(1.dp, Slate200, RoundedCornerShape(14.dp))
+                        .clickable { onPhotoClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (product.imageUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = product.imageUrl,
+                            contentDescription = product.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Inventory,
+                            contentDescription = null,
+                            tint = IndigoPrimary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = product.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text(
+                            text = product.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        StockStatusBadge(status = stockStatus)
+                    }
+
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "SKU: ${product.sku} • Barcode: ${product.barcode}",
                         style = MaterialTheme.typography.labelSmall,
                         color = Slate500
                     )
+
+                    // Expiry alert if applicable
+                    if (product.expiryDate.isNotBlank()) {
+                        Text(
+                            text = "Expiry: ${product.expiryDate}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Slate600
+                        )
+                    }
                 }
-                StockStatusBadge(status = stockStatus)
             }
 
             // Description if available

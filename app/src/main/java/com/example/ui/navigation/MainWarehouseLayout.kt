@@ -27,13 +27,17 @@ import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
@@ -72,29 +76,38 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.local.entity.NotificationEntity
+import com.example.domain.model.UserRole
 import com.example.ui.components.MinimalButton
 import com.example.ui.components.MinimalCard
 import com.example.ui.components.SyncStatusChip
+import com.example.ui.screens.ApprovalsScreen
 import com.example.ui.screens.AssetManagementScreen
 import com.example.ui.screens.DashboardScreen
+import com.example.ui.screens.FindProductScreen
 import com.example.ui.screens.HardwarePeripheralsScreen
+import com.example.ui.screens.LoginScreen
 import com.example.ui.screens.ProductListScreen
 import com.example.ui.screens.ReportsScreen
 import com.example.ui.screens.ScannerScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.SyncQueueScreen
 import com.example.ui.screens.TransactionHistoryScreen
+import com.example.ui.screens.UserManagementScreen
 import com.example.ui.screens.WarehouseLocationScreen
+import com.example.ui.theme.EmeraldContainer
+import com.example.ui.theme.EmeraldOnContainer
+import com.example.ui.theme.EmeraldPrimary
+import com.example.ui.theme.IndigoContainer
+import com.example.ui.theme.IndigoOnContainer
+import com.example.ui.theme.IndigoPrimary
 import com.example.ui.theme.MutedCoral
-import com.example.ui.theme.SageTeal
-import com.example.ui.theme.SageTealContainer
-import com.example.ui.theme.SageTealOnContainer
 import com.example.ui.theme.Slate100
 import com.example.ui.theme.Slate200
 import com.example.ui.theme.Slate500
 import com.example.ui.theme.Slate600
 import com.example.ui.theme.Slate700
 import com.example.ui.theme.Slate900
+import com.example.ui.theme.VioletPrimary
 import com.example.ui.viewmodel.WarehouseScreen
 import com.example.ui.viewmodel.WarehouseViewModel
 import kotlinx.coroutines.launch
@@ -115,16 +128,15 @@ fun MainWarehouseLayout(
     val syncQueue by viewModel.syncQueue.collectAsState()
     val notifications by viewModel.notifications.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
 
     val pendingSyncCount = syncQueue.count { it.status.name == "PENDING" || it.status.name == "FAILED" }
     val unreadNotifications = notifications.count { !it.isRead }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
     var showMoreMenuSheet by remember { mutableStateOf(false) }
     var showNotificationsDialog by remember { mutableStateOf(false) }
 
-    // Show feedback snackbar whenever statusMessage updates
     LaunchedEffect(statusMessage) {
         statusMessage?.let { msg ->
             snackbarHostState.showSnackbar(msg)
@@ -133,8 +145,14 @@ fun MainWarehouseLayout(
     }
 
     // Predictive back navigation handling
-    BackHandler(enabled = currentScreen !is WarehouseScreen.Dashboard) {
+    BackHandler(enabled = currentScreen !is WarehouseScreen.Dashboard && currentScreen !is WarehouseScreen.Login) {
         viewModel.navigateBack()
+    }
+
+    // If current screen is Login, display the full login interface
+    if (currentScreen is WarehouseScreen.Login) {
+        LoginScreen(viewModel = viewModel)
+        return
     }
 
     Scaffold(
@@ -157,6 +175,9 @@ fun MainWarehouseLayout(
                                 is WarehouseScreen.SyncQueue -> "Offline Sync Queue"
                                 is WarehouseScreen.Hardware -> "Hardware Peripherals"
                                 is WarehouseScreen.Reports -> "Reports & Analytics"
+                                is WarehouseScreen.UserManagement -> "User Administration"
+                                is WarehouseScreen.Approvals -> "Transfer Approvals"
+                                is WarehouseScreen.FindProduct -> "Find Product Location"
                                 is WarehouseScreen.Settings -> "System Settings"
                                 else -> "Smart Warehouse"
                             },
@@ -178,7 +199,7 @@ fun MainWarehouseLayout(
                 actions = {
                     IconButton(
                         onClick = { showNotificationsDialog = true },
-                        modifier = Modifier.padding(end = 4.dp).testTag("notifications_button")
+                        modifier = Modifier.testTag("notifications_button")
                     ) {
                         BadgedBox(
                             badge = {
@@ -199,6 +220,18 @@ fun MainWarehouseLayout(
                             )
                         }
                     }
+
+                    // Logout trigger
+                    IconButton(
+                        onClick = { viewModel.logout() },
+                        modifier = Modifier.padding(end = 4.dp).testTag("logout_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ExitToApp,
+                            contentDescription = "Sign Out",
+                            tint = Slate700
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -206,7 +239,6 @@ fun MainWarehouseLayout(
             )
         },
         bottomBar = {
-            // Minimalist Bottom Navigation Bar with rounded selection pills
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
                 tonalElevation = 0.dp,
@@ -222,10 +254,10 @@ fun MainWarehouseLayout(
                     selected = currentScreen is WarehouseScreen.Dashboard,
                     onClick = { viewModel.navigateTo(WarehouseScreen.Dashboard) },
                     icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard") },
-                    label = { Text("Overview", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
+                    label = { Text("Overview", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = SageTealContainer,
-                        selectedIconColor = SageTealOnContainer
+                        indicatorColor = IndigoContainer,
+                        selectedIconColor = IndigoOnContainer
                     ),
                     modifier = Modifier.testTag("nav_dashboard")
                 )
@@ -234,10 +266,10 @@ fun MainWarehouseLayout(
                     selected = currentScreen is WarehouseScreen.Products,
                     onClick = { viewModel.navigateTo(WarehouseScreen.Products) },
                     icon = { Icon(Icons.Default.Inventory2, contentDescription = "Products") },
-                    label = { Text("Products", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
+                    label = { Text("Products", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = SageTealContainer,
-                        selectedIconColor = SageTealOnContainer
+                        indicatorColor = IndigoContainer,
+                        selectedIconColor = IndigoOnContainer
                     ),
                     modifier = Modifier.testTag("nav_products")
                 )
@@ -246,10 +278,10 @@ fun MainWarehouseLayout(
                     selected = currentScreen is WarehouseScreen.Scanner,
                     onClick = { viewModel.navigateTo(WarehouseScreen.Scanner) },
                     icon = { Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan") },
-                    label = { Text("Scan", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
+                    label = { Text("Scan", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = SageTealContainer,
-                        selectedIconColor = SageTealOnContainer
+                        indicatorColor = EmeraldContainer,
+                        selectedIconColor = EmeraldOnContainer
                     ),
                     modifier = Modifier.testTag("nav_scanner")
                 )
@@ -258,10 +290,10 @@ fun MainWarehouseLayout(
                     selected = currentScreen is WarehouseScreen.Assets,
                     onClick = { viewModel.navigateTo(WarehouseScreen.Assets) },
                     icon = { Icon(Icons.Default.Build, contentDescription = "Assets") },
-                    label = { Text("Assets", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
+                    label = { Text("Assets", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = SageTealContainer,
-                        selectedIconColor = SageTealOnContainer
+                        indicatorColor = IndigoContainer,
+                        selectedIconColor = IndigoOnContainer
                     ),
                     modifier = Modifier.testTag("nav_assets")
                 )
@@ -273,13 +305,16 @@ fun MainWarehouseLayout(
                         currentScreen is WarehouseScreen.SyncQueue ||
                         currentScreen is WarehouseScreen.Hardware ||
                         currentScreen is WarehouseScreen.Reports ||
+                        currentScreen is WarehouseScreen.UserManagement ||
+                        currentScreen is WarehouseScreen.Approvals ||
+                        currentScreen is WarehouseScreen.FindProduct ||
                         currentScreen is WarehouseScreen.Settings,
                     onClick = { showMoreMenuSheet = true },
                     icon = { Icon(Icons.Default.MoreHoriz, contentDescription = "More") },
-                    label = { Text("More", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
+                    label = { Text("More", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = SageTealContainer,
-                        selectedIconColor = SageTealOnContainer
+                        indicatorColor = IndigoContainer,
+                        selectedIconColor = IndigoOnContainer
                     ),
                     modifier = Modifier.testTag("nav_more")
                 )
@@ -303,6 +338,9 @@ fun MainWarehouseLayout(
                 is WarehouseScreen.SyncQueue -> SyncQueueScreen(viewModel = viewModel)
                 is WarehouseScreen.Hardware -> HardwarePeripheralsScreen(viewModel = viewModel)
                 is WarehouseScreen.Reports -> ReportsScreen(viewModel = viewModel)
+                is WarehouseScreen.UserManagement -> UserManagementScreen(viewModel = viewModel)
+                is WarehouseScreen.Approvals -> ApprovalsScreen(viewModel = viewModel)
+                is WarehouseScreen.FindProduct -> FindProductScreen(viewModel = viewModel)
                 is WarehouseScreen.Settings -> SettingsScreen(viewModel = viewModel)
                 else -> DashboardScreen(viewModel = viewModel)
             }
@@ -332,6 +370,36 @@ fun MainWarehouseLayout(
                 )
 
                 MoreMenuItem(
+                    title = "Find Product Location (Bin Finder)",
+                    subtitle = "Search any SKU or name to get Section, Rack, Shelf, and Bin",
+                    icon = Icons.Default.LocationOn,
+                    onClick = {
+                        showMoreMenuSheet = false
+                        viewModel.navigateTo(WarehouseScreen.FindProduct)
+                    }
+                )
+
+                MoreMenuItem(
+                    title = "Transfer Approvals",
+                    subtitle = "Managerial authorization for internal warehouse relocations",
+                    icon = Icons.Default.Verified,
+                    onClick = {
+                        showMoreMenuSheet = false
+                        viewModel.navigateTo(WarehouseScreen.Approvals)
+                    }
+                )
+
+                MoreMenuItem(
+                    title = "User Administration",
+                    subtitle = "Admin controls: create users, assign roles, activate/deactivate",
+                    icon = Icons.Default.Group,
+                    onClick = {
+                        showMoreMenuSheet = false
+                        viewModel.navigateTo(WarehouseScreen.UserManagement)
+                    }
+                )
+
+                MoreMenuItem(
                     title = "Locations & Bins",
                     subtitle = "Warehouse hierarchy: Section -> Rack -> Shelf -> Bin",
                     icon = Icons.Default.Business,
@@ -353,7 +421,7 @@ fun MainWarehouseLayout(
 
                 MoreMenuItem(
                     title = "Offline Sync Queue",
-                    subtitle = "Inspect and dispatch offline queued operations",
+                    subtitle = "Inspect and dispatch offline queued operations with idempotency",
                     icon = Icons.Default.CloudSync,
                     onClick = {
                         showMoreMenuSheet = false
@@ -363,7 +431,7 @@ fun MainWarehouseLayout(
 
                 MoreMenuItem(
                     title = "Hardware & Bluetooth",
-                    subtitle = "Connect Bluetooth barcode scanners, printers, and NFC",
+                    subtitle = "Connect Bluetooth barcode scanners, printers, and NFC tags",
                     icon = Icons.Default.Bluetooth,
                     onClick = {
                         showMoreMenuSheet = false
@@ -373,7 +441,7 @@ fun MainWarehouseLayout(
 
                 MoreMenuItem(
                     title = "Reports & Analytics",
-                    subtitle = "Valuation, stock health, and category turnover",
+                    subtitle = "Financial valuation, stock health, and category turnover",
                     icon = Icons.Default.Assessment,
                     onClick = {
                         showMoreMenuSheet = false
@@ -428,13 +496,13 @@ private fun MoreMenuItem(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(SageTealContainer),
+                    .background(IndigoContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = SageTeal,
+                    tint = IndigoPrimary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -480,7 +548,8 @@ private fun NotificationsDialog(
                     Text(
                         text = "Warehouse Notifications",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = Slate900
                     )
                     IconButton(onClick = onDismiss) {
                         Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
@@ -503,7 +572,7 @@ private fun NotificationsDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(if (notif.isRead) Slate100 else SageTealContainer.copy(alpha = 0.5f))
+                                    .background(if (notif.isRead) Slate100 else EmeraldContainer.copy(alpha = 0.5f))
                                     .clickable { onItemClick(notif) }
                                     .padding(12.dp)
                             ) {

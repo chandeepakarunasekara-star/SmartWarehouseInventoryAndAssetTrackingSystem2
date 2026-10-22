@@ -10,6 +10,7 @@ import com.example.domain.model.UserRole
 
 /**
  * Stores authenticated employee and manager profiles locally for offline authorization.
+ * Supports administrator user management: create, assign roles, activate/deactivate.
  */
 @Entity(tableName = "users")
 data class UserEntity(
@@ -20,6 +21,7 @@ data class UserEntity(
     val email: String,
     val role: UserRole,
     val warehouseAssignedId: String,
+    val isActive: Boolean = true,
     val lastLoginTimestamp: Long = System.currentTimeMillis()
 )
 
@@ -85,7 +87,8 @@ data class LocationEntity(
 
 /**
  * Master catalog item record for goods stored across warehouses.
- * Includes barcode/QR mapping, stock levels, safety thresholds, and expiration dates.
+ * Includes barcode/QR mapping, stock levels, safety thresholds, expiration dates,
+ * and photo / visual asset image URL.
  */
 @Entity(tableName = "products")
 data class ProductEntity(
@@ -104,6 +107,7 @@ data class ProductEntity(
     val expiryDate: String, // YYYY-MM-DD
     val locationId: String,
     val warehouseId: String,
+    val imageUrl: String = "",
     val isActive: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
@@ -111,7 +115,7 @@ data class ProductEntity(
 
 /**
  * Immutable ledger of every physical stock addition, deduction, or warehouse transfer.
- * Ensures an auditable chain of custody.
+ * Enforces transfer approval lifecycle: PENDING, APPROVED, IN_TRANSIT, COMPLETED, CANCELLED.
  */
 @Entity(tableName = "stock_transactions")
 data class StockTransactionEntity(
@@ -128,12 +132,15 @@ data class StockTransactionEntity(
     val timestamp: Long = System.currentTimeMillis(),
     val referenceNumber: String,
     val notes: String = "",
+    val transferStatus: String = "COMPLETED", // PENDING, APPROVED, IN_TRANSIT, COMPLETED, CANCELLED
+    val requestedBy: String = "",
+    val approvedBy: String = "",
     val syncStatus: SyncStatus = SyncStatus.PENDING
 )
 
 /**
  * Tracks high-value physical equipment (forklifts, scanners, pallet jacks, testing tools)
- * distinct from consumable inventory stock.
+ * distinct from consumable inventory stock, including photo/image reference.
  */
 @Entity(tableName = "assets")
 data class AssetEntity(
@@ -151,6 +158,7 @@ data class AssetEntity(
     val purchaseDate: String,
     val lastInspectionDate: String,
     val nfcTagId: String = "",
+    val imageUrl: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )
 

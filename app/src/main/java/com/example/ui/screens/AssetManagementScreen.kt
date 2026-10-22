@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CompareArrows
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Timeline
@@ -46,37 +47,45 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
 import com.example.data.local.entity.AssetEntity
 import com.example.data.local.entity.AssetMovementEntity
 import com.example.data.local.entity.LocationEntity
 import com.example.domain.model.AssetStatus
 import com.example.ui.components.AssetStatusBadge
+import com.example.ui.components.ImageViewerDialog
 import com.example.ui.components.MinimalButton
 import com.example.ui.components.MinimalCard
 import com.example.ui.components.MinimalOutlinedButton
 import com.example.ui.components.RegisterAssetDialog
-import com.example.ui.theme.SageTeal
-import com.example.ui.theme.SageTealContainer
-import com.example.ui.theme.SageTealOnContainer
+import com.example.ui.theme.EmeraldPrimary
+import com.example.ui.theme.IndigoContainer
+import com.example.ui.theme.IndigoOnContainer
+import com.example.ui.theme.IndigoPrimary
 import com.example.ui.theme.Slate100
+import com.example.ui.theme.Slate200
 import com.example.ui.theme.Slate400
 import com.example.ui.theme.Slate500
 import com.example.ui.theme.Slate600
 import com.example.ui.theme.Slate700
 import com.example.ui.theme.Slate900
+import com.example.ui.theme.VioletContainer
+import com.example.ui.theme.VioletOnContainer
+import com.example.ui.theme.VioletPrimary
 import com.example.ui.viewmodel.WarehouseViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Screen managing physical warehouse assets (forklifts, scanners, pallet jacks),
- * maintenance status, employee assignments, and location movements.
+ * Screen managing physical warehouse assets (forklifts, pallet trucks, scanners, printers),
+ * maintenance status, employee assignments, movement tracking, and photo visualization (Use Cases 9, 10, 11).
  */
 @Composable
 fun AssetManagementScreen(
@@ -88,10 +97,11 @@ fun AssetManagementScreen(
     val warehouses by viewModel.warehouses.collectAsState()
     val locations by viewModel.allLocations.collectAsState()
 
-    var selectedTab by remember { mutableStateOf(0) } // 0: Assets, 1: Movement Logs
+    var selectedTab by remember { mutableStateOf(0) }
     var selectedStatusFilter by remember { mutableStateOf<AssetStatus?>(null) }
     var showRegisterDialog by remember { mutableStateOf(false) }
     var movingAssetTarget by remember { mutableStateOf<AssetEntity?>(null) }
+    var inspectingPhotoAsset by remember { mutableStateOf<AssetEntity?>(null) }
 
     val filteredAssets = assets.filter { asset ->
         selectedStatusFilter == null || asset.status == selectedStatusFilter
@@ -104,7 +114,7 @@ fun AssetManagementScreen(
                 FloatingActionButton(
                     onClick = { showRegisterDialog = true },
                     shape = RoundedCornerShape(16.dp),
-                    containerColor = MaterialTheme.colorScheme.primary,
+                    containerColor = VioletPrimary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.testTag("register_asset_fab")
                 ) {
@@ -122,17 +132,17 @@ fun AssetManagementScreen(
             TabRow(
                 selectedTabIndex = selectedTab,
                 containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = SageTeal
+                contentColor = VioletPrimary
             ) {
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text("Equipment Assets (${assets.size})", fontWeight = FontWeight.SemiBold) }
+                    text = { Text("Equipment Assets (${assets.size})", fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("Movement History", fontWeight = FontWeight.SemiBold) }
+                    text = { Text("Movement History", fontWeight = FontWeight.Bold) }
                 )
             }
 
@@ -168,26 +178,67 @@ fun AssetManagementScreen(
                         val matchingLoc = locations.find { it.locationId == asset.locationId }
 
                         MinimalCard(modifier = Modifier.testTag("asset_card_${asset.assetCode}")) {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     verticalAlignment = Alignment.Top
                                 ) {
+                                    // Asset Photo with tap-to-inspect
+                                    Box(
+                                        modifier = Modifier
+                                            .size(68.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(Slate100)
+                                            .border(1.dp, Slate200, RoundedCornerShape(14.dp))
+                                            .clickable { inspectingPhotoAsset = asset },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (asset.imageUrl.isNotBlank()) {
+                                            AsyncImage(
+                                                model = asset.imageUrl,
+                                                contentDescription = asset.name,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Default.Build,
+                                                contentDescription = null,
+                                                tint = VioletPrimary,
+                                                modifier = Modifier.size(28.dp)
+                                            )
+                                        }
+                                    }
+
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = asset.name,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.Top
+                                        ) {
+                                            Text(
+                                                text = asset.name,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Slate900,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            AssetStatusBadge(status = asset.status)
+                                        }
+
+                                        Spacer(modifier = Modifier.height(2.dp))
                                         Text(
                                             text = "Tag: ${asset.assetCode} • Serial: ${asset.serialNumber}",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Slate500
                                         )
+                                        Text(
+                                            text = "Category: ${asset.category}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Slate600
+                                        )
                                     }
-                                    AssetStatusBadge(status = asset.status)
                                 }
 
                                 Row(
@@ -202,7 +253,7 @@ fun AssetManagementScreen(
                                     )
                                     Text(
                                         text = if (asset.assignedEmployeeName.isNotBlank()) {
-                                            "Assigned to: ${asset.assignedEmployeeName}"
+                                            "Responsible: ${asset.assignedEmployeeName}"
                                         } else {
                                             "Unassigned • Available on warehouse floor"
                                         },
@@ -249,7 +300,7 @@ fun AssetManagementScreen(
                     }
                 }
             } else {
-                // Movement History List
+                // Movement History List (Use Case 11)
                 val dateFormatter = remember { SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()) }
 
                 LazyColumn(
@@ -273,7 +324,7 @@ fun AssetManagementScreen(
                                     Text(
                                         text = mov.movementType,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = SageTeal,
+                                        color = VioletPrimary,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
@@ -293,7 +344,7 @@ fun AssetManagementScreen(
                                 }
 
                                 Text(
-                                    text = "Authorized by ${mov.performedBy} • $formattedDate",
+                                    text = "Recorded by ${mov.performedBy} • $formattedDate",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = Slate400
                                 )
@@ -305,14 +356,14 @@ fun AssetManagementScreen(
         }
     }
 
-    // Register Asset Dialog
+    // Register Asset Dialog with Photo support
     if (showRegisterDialog) {
         RegisterAssetDialog(
             warehouses = warehouses,
             locations = locations,
             onDismiss = { showRegisterDialog = false },
-            onConfirm = { code, name, category, serial, status, whId, locId, emp ->
-                viewModel.registerAsset(code, name, category, serial, status, whId, locId, emp)
+            onConfirm = { code, name, category, serial, status, whId, locId, emp, img ->
+                viewModel.registerAsset(code, name, category, serial, status, whId, locId, emp, img)
                 showRegisterDialog = false
             }
         )
@@ -330,6 +381,18 @@ fun AssetManagementScreen(
             }
         )
     }
+
+    // Photo Inspection for Equipment Assets
+    inspectingPhotoAsset?.let { asset ->
+        val loc = locations.find { it.locationId == asset.locationId }
+        ImageViewerDialog(
+            title = asset.name,
+            subtitle = "Tag: ${asset.assetCode} • Serial: ${asset.serialNumber}",
+            imageUrl = asset.imageUrl,
+            badgeText = "Status: ${asset.status.name} • Location: ${loc?.fullHierarchyPath ?: asset.locationId} • Responsible: ${asset.assignedEmployeeName.ifBlank { "Floor Stock" }}",
+            onDismiss = { inspectingPhotoAsset = null }
+        )
+    }
 }
 
 @Composable
@@ -341,10 +404,10 @@ private fun AssetFilterPill(
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
-            .background(if (isSelected) SageTealContainer else Slate100)
+            .background(if (isSelected) VioletContainer else Slate100)
             .border(
                 1.dp,
-                if (isSelected) SageTeal else MaterialTheme.colorScheme.outline,
+                if (isSelected) VioletPrimary else MaterialTheme.colorScheme.outline,
                 RoundedCornerShape(50)
             )
             .clickable { onClick() }
@@ -355,7 +418,7 @@ private fun AssetFilterPill(
             text = label,
             fontSize = 12.sp,
             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (isSelected) SageTealOnContainer else Slate700
+            color = if (isSelected) VioletOnContainer else Slate700
         )
     }
 }
@@ -433,7 +496,7 @@ private fun MoveAssetDialog(
                     MinimalButton(
                         text = "Confirm Move",
                         onClick = {
-                            val locId = selectedLocation?.locationId ?: "LOC-WH1-B21"
+                            val locId = selectedLocation?.locationId ?: "LOC-WHA-B-R03-S02"
                             onConfirm(locId, employeeInput, movementType, notes)
                         },
                         modifier = Modifier.weight(1f)

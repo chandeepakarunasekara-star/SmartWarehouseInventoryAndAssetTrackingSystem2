@@ -32,9 +32,11 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 /**
- * Navigation routes supported across the Smart Warehouse application.
+ * Navigation routes supported across the Smart Warehouse application,
+ * matching all 28 use cases from the specifications.
  */
 sealed class WarehouseScreen {
+    data object Login : WarehouseScreen()
     data object Dashboard : WarehouseScreen()
     data object Products : WarehouseScreen()
     data object Scanner : WarehouseScreen()
@@ -45,12 +47,15 @@ sealed class WarehouseScreen {
     data object SyncQueue : WarehouseScreen()
     data object Hardware : WarehouseScreen()
     data object Reports : WarehouseScreen()
+    data object UserManagement : WarehouseScreen()
+    data object Approvals : WarehouseScreen()
+    data object FindProduct : WarehouseScreen()
     data object Settings : WarehouseScreen()
     data class ProductDetail(val productId: String) : WarehouseScreen()
 }
 
 /**
- * Main ViewModel orchestrating state between the UI and WarehouseRepository.
+ * Main ViewModel orchestrating state between the UI, Room database, and hardware managers.
  */
 class WarehouseViewModel(
     val repository: WarehouseRepository,
@@ -62,7 +67,6 @@ class WarehouseViewModel(
     private val _currentScreen = MutableStateFlow<WarehouseScreen>(WarehouseScreen.Dashboard)
     val currentScreen = _currentScreen.asStateFlow()
 
-    // Screen back-stack for seamless back navigation
     private val screenBackStack = mutableListOf<WarehouseScreen>(WarehouseScreen.Dashboard)
 
     fun navigateTo(screen: WarehouseScreen) {
@@ -87,6 +91,24 @@ class WarehouseViewModel(
 
     fun switchUserRole(role: UserRole) {
         repository.switchUserRole(role)
+        showFeedback("Switched active profile to ${role.name}")
+    }
+
+    fun login(username: String, role: UserRole) {
+        viewModelScope.launch {
+            val result = repository.loginUser(username, role)
+            result.onSuccess { user ->
+                showFeedback("Welcome, ${user.fullName} (${user.role.name})")
+                navigateTo(WarehouseScreen.Dashboard)
+            }.onFailure { err ->
+                showFeedback("Login failed: ${err.message}")
+            }
+        }
+    }
+
+    fun logout() {
+        navigateTo(WarehouseScreen.Login)
+        showFeedback("Logged out successfully.")
     }
 
     fun toggleNetworkConnection() {
@@ -98,6 +120,9 @@ class WarehouseViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val lowStockProducts: StateFlow<List<ProductEntity>> = repository.observeLowStockProducts()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val expiringProducts: StateFlow<List<ProductEntity>> = repository.observeExpiringProducts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val warehouses: StateFlow<List<WarehouseEntity>> = repository.observeWarehouses()
@@ -116,6 +141,12 @@ class WarehouseViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val recentTransactions: StateFlow<List<StockTransactionEntity>> = repository.observeRecentTransactions()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val pendingTransfers: StateFlow<List<StockTransactionEntity>> = repository.observePendingTransfers()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allUsers: StateFlow<List<UserEntity>> = repository.observeUsers()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val syncQueue: StateFlow<List<SyncQueueEntity>> = repository.observeAllSyncItems()
@@ -180,7 +211,6 @@ class WarehouseViewModel(
         scanErrorMessage.value = null
 
         viewModelScope.launch {
-            // First check if product matches
             val product = repository.findProductByCode(clean)
             if (product != null) {
                 scannedProductResult.value = product
@@ -188,7 +218,6 @@ class WarehouseViewModel(
                 return@launch
             }
 
-            // Next check if asset matches
             val asset = repository.findAssetByCode(clean)
             if (asset != null) {
                 scannedAssetResult.value = asset
@@ -196,7 +225,6 @@ class WarehouseViewModel(
                 return@launch
             }
 
-            // Not found
             scannedProductResult.value = null
             scannedAssetResult.value = null
             scanErrorMessage.value = "No product or asset found matching: $clean"
@@ -289,14 +317,22 @@ class WarehouseViewModel(
                 notes
             )
             result.onSuccess {
-                showFeedback("Transfer recorded! Moved to $destinationLocationId.")
+                showFeedback("Transfer recorded! Destination: $destinationLocationId.")
             }.onFailure { e ->
                 showFeedback("Transfer failed: ${e.message}")
             }
         }
     }
 
-    // Add Product action
+    // Transfer Approval action
+    fun approveTransfer(transactionId: String) {
+        viewModelScope.launch {
+            repository.approveTransfer(transactionId, currentUser.value.fullName)
+            showFeedback("Transfer $transactionId approved successfully.")
+        }
+    }
+
+    // Add Product action with Photo support
     fun createProduct(
         sku: String,
         barcode: String,
@@ -308,7 +344,9 @@ class WarehouseViewModel(
         quantity: Int,
         minStock: Int,
         locationId: String,
-        warehouseId: String
+        warehouseId: String,
+        imageUrl: String = "",
+        expiryDate: String = "2030-12-31"
     ) {
         viewModelScope.launch {
             val product = ProductEntity(
@@ -323,16 +361,24 @@ class WarehouseViewModel(
                 unitPrice = unitPrice,
                 quantity = quantity,
                 minimumStockLevel = minStock,
-                expiryDate = "2030-12-31",
+                expiryDate = expiryDate,
                 locationId = locationId,
-                warehouseId = warehouseId
+                warehouseId = warehouseId,
+                imageUrl = imageUrl.trim()
             )
             repository.saveProduct(product)
             showFeedback("Created product ${product.name} (SKU: ${product.sku})")
         }
     }
 
-    // Asset Registration action
+    fun deactivateProduct(productId: String) {
+        viewModelScope.launch {
+            repository.deactivateProduct(productId)
+            showFeedback("Product deactivated.")
+        }
+    }
+
+    // Asset Registration action with Photo support
     fun registerAsset(
         code: String,
         name: String,
@@ -341,7 +387,8 @@ class WarehouseViewModel(
         status: AssetStatus,
         warehouseId: String,
         locationId: String,
-        assignedEmployee: String
+        assignedEmployee: String,
+        imageUrl: String = ""
     ) {
         viewModelScope.launch {
             val asset = AssetEntity(
@@ -356,7 +403,8 @@ class WarehouseViewModel(
                 assignedEmployeeName = assignedEmployee.trim(),
                 purchaseDate = "2026-01-15",
                 lastInspectionDate = "2026-10-01",
-                nfcTagId = "NFC-${code.trim()}"
+                nfcTagId = "NFC-${code.trim()}",
+                imageUrl = imageUrl.trim()
             )
             repository.saveAsset(asset)
             showFeedback("Registered physical asset: ${asset.name}")
@@ -384,6 +432,37 @@ class WarehouseViewModel(
             }.onFailure { e ->
                 showFeedback("Asset movement failed: ${e.message}")
             }
+        }
+    }
+
+    // User Management actions (Use Case 23)
+    fun createUser(fullName: String, username: String, email: String, role: UserRole, warehouseId: String) {
+        viewModelScope.launch {
+            val user = repository.createUser(fullName, username, email, role, warehouseId)
+            showFeedback("Created user account ${user.fullName} (${user.role.name})")
+        }
+    }
+
+    fun toggleUserActive(userId: String, currentActive: Boolean) {
+        viewModelScope.launch {
+            repository.toggleUserActive(userId, currentActive)
+            showFeedback("User status updated.")
+        }
+    }
+
+    // Warehouse & Location Creation
+    fun createWarehouse(name: String, code: String, address: String, capacity: Int, manager: String) {
+        viewModelScope.launch {
+            val wh = repository.createWarehouse(name, code, address, capacity, manager)
+            showFeedback("Created warehouse ${wh.name} (${wh.code})")
+        }
+    }
+
+    fun createLocation(warehouseId: String, section: String, rack: String, shelf: String, binCode: String, maxCapacity: Int) {
+        viewModelScope.launch {
+            val loc = repository.createLocation(warehouseId, section, rack, shelf, binCode, maxCapacity)
+            _allLocations.value = repository.getAllLocations()
+            showFeedback("Created storage location ${loc.fullHierarchyPath}")
         }
     }
 
@@ -415,6 +494,32 @@ class WarehouseViewModel(
     fun markNotificationRead(id: String) {
         viewModelScope.launch {
             repository.markNotificationAsRead(id)
+        }
+    }
+
+    // Remote REST Server & Firebase Cloud configuration
+    val remoteApiUrl = MutableStateFlow(repository.getRemoteBaseUrl())
+    val remotePingResult = MutableStateFlow<String?>(null)
+    val isTestingConnection = MutableStateFlow(false)
+
+    fun updateRemoteApiUrl(url: String) {
+        repository.updateRemoteBaseUrl(url)
+        remoteApiUrl.value = url
+        showFeedback("Saved Remote API URL: $url")
+    }
+
+    fun testRemoteConnection() {
+        viewModelScope.launch {
+            isTestingConnection.value = true
+            val result = repository.pingRemoteServer()
+            isTestingConnection.value = false
+            val summary = if (result.isReachable) {
+                "Online (${result.latencyMs}ms): ${result.message}"
+            } else {
+                "Unreachable (${result.latencyMs}ms): ${result.message}"
+            }
+            remotePingResult.value = summary
+            showFeedback(summary)
         }
     }
 }
