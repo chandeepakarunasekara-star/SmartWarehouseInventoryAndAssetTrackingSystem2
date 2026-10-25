@@ -20,10 +20,12 @@ import com.example.domain.model.TransactionType
 import com.example.domain.model.UserRole
 import com.example.data.remote.RemoteWarehouseDataSource
 import com.example.data.remote.model.ServerHealthCheckResult
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
@@ -40,6 +42,14 @@ class WarehouseRepository(private val database: AppDatabase) {
     private val syncQueueDao = database.syncQueueDao()
     private val userDao = database.userDao()
     private val remoteDataSource = RemoteWarehouseDataSource()
+
+    init {
+        CoroutineScope(Dispatchers.IO).launch {
+            if (productDao.getAllProducts().isEmpty()) {
+                com.example.data.local.DatabaseInitialDataSeeder.seedInitialData(database)
+            }
+        }
+    }
 
     fun updateRemoteBaseUrl(url: String) {
         remoteDataSource.updateBaseUrl(url)
@@ -255,6 +265,45 @@ class WarehouseRepository(private val database: AppDatabase) {
     suspend fun getAllLocations(): List<LocationEntity> = withContext(Dispatchers.IO) { warehouseDao.getAllLocations() }
     fun observeCategories(): Flow<List<CategoryEntity>> = warehouseDao.observeCategories()
     fun observeSuppliers(): Flow<List<SupplierEntity>> = warehouseDao.observeSuppliers()
+
+    suspend fun createSupplier(name: String, contactPerson: String, email: String, phone: String, address: String): SupplierEntity = withContext(Dispatchers.IO) {
+        val sup = SupplierEntity(
+            supplierId = "SUP-" + UUID.randomUUID().toString().take(6).uppercase(),
+            name = name.trim(),
+            contactPerson = contactPerson.trim(),
+            email = email.trim(),
+            phone = phone.trim(),
+            address = address.trim()
+        )
+        warehouseDao.insertSupplier(sup)
+        userDao.insertAuditLog(
+            AuditLogEntity(
+                eventId = UUID.randomUUID().toString(),
+                userId = _currentUser.value.userId,
+                userName = _currentUser.value.fullName,
+                eventType = "SUPPLIER_CREATED",
+                entityType = "SUPPLIER",
+                entityId = sup.supplierId,
+                details = "Supplier ${sup.name} registered by ${_currentUser.value.fullName}."
+            )
+        )
+        sup
+    }
+
+    suspend fun deleteSupplier(supplierId: String) = withContext(Dispatchers.IO) {
+        warehouseDao.deleteSupplierById(supplierId)
+        userDao.insertAuditLog(
+            AuditLogEntity(
+                eventId = UUID.randomUUID().toString(),
+                userId = _currentUser.value.userId,
+                userName = _currentUser.value.fullName,
+                eventType = "SUPPLIER_DELETED",
+                entityType = "SUPPLIER",
+                entityId = supplierId,
+                details = "Supplier $supplierId removed."
+            )
+        )
+    }
 
     suspend fun createWarehouse(name: String, code: String, address: String, capacity: Int, manager: String): WarehouseEntity = withContext(Dispatchers.IO) {
         val wh = WarehouseEntity(

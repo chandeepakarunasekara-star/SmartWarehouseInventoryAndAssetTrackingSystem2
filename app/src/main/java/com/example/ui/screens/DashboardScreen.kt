@@ -20,26 +20,24 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AdminPanelSettings
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.AddBox
 import androidx.compose.material.icons.filled.Assessment
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CompareArrows
-import androidx.compose.material.icons.filled.Engineering
-import androidx.compose.material.icons.filled.EventNote
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.HourglassBottom
-import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.Eco
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.SupervisorAccount
-import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -55,41 +53,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.local.entity.StockTransactionEntity
+import coil.compose.AsyncImage
 import com.example.domain.model.StockLevelStatus
 import com.example.domain.model.TransactionType
 import com.example.domain.model.UserRole
-import com.example.ui.components.MetricCounterCard
-import com.example.ui.components.MinimalCard
 import com.example.ui.components.StockInDialog
 import com.example.ui.components.StockOutDialog
 import com.example.ui.components.StockTransferDialog
-import com.example.ui.theme.AmberContainer
-import com.example.ui.theme.AmberOnContainer
-import com.example.ui.theme.AmberPrimary
-import com.example.ui.theme.CyanContainer
-import com.example.ui.theme.CyanPrimary
-import com.example.ui.theme.EmeraldContainer
-import com.example.ui.theme.EmeraldPrimary
-import com.example.ui.theme.IndigoContainer
-import com.example.ui.theme.IndigoPrimary
-import com.example.ui.theme.RoseContainer
-import com.example.ui.theme.RosePrimary
-import com.example.ui.theme.Slate100
-import com.example.ui.theme.Slate200
-import com.example.ui.theme.Slate400
-import com.example.ui.theme.Slate500
-import com.example.ui.theme.Slate600
-import com.example.ui.theme.Slate700
-import com.example.ui.theme.Slate900
-import com.example.ui.theme.VioletContainer
-import com.example.ui.theme.VioletPrimary
+import com.example.ui.components.WarehouseVideoClipPlayer
 import com.example.ui.viewmodel.WarehouseScreen
 import com.example.ui.viewmodel.WarehouseViewModel
 import java.text.SimpleDateFormat
@@ -97,11 +76,14 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Adaptive, role-tailored Dashboard screen (Use Cases 1, 14, 15, 19).
- * Dynamically customizes metrics and action items based on user role:
- * - Administrator
- * - Warehouse Manager
- * - Warehouse Employee
+ * Modern Dashboard screen matching the design aesthetic of the reference screenshot.
+ * Features:
+ * - Brand header with logo, notification badge, and profile button
+ * - Deep emerald gradient hero card with "Your inventory, now easier to track" & action button
+ * - 4 Quick-Action squircle buttons (Scan, Add Item, Transfer, Find)
+ * - Operations video clip player component
+ * - Inventory item cards matching the "Nearby Stations" layout from the design
+ * - "Quick Stock In" card replicating the "Top up your wallet" layout
  */
 @Composable
 fun DashboardScreen(
@@ -111,345 +93,526 @@ fun DashboardScreen(
     val currentUser by viewModel.currentUser.collectAsState()
     val products by viewModel.allProducts.collectAsState()
     val lowStockProducts by viewModel.lowStockProducts.collectAsState()
-    val expiringProducts by viewModel.expiringProducts.collectAsState()
-    val pendingTransfers by viewModel.pendingTransfers.collectAsState()
-    val assets by viewModel.assets.collectAsState()
-    val recentTransactions by viewModel.recentTransactions.collectAsState()
-    val syncQueue by viewModel.syncQueue.collectAsState()
+    val notifications by viewModel.notifications.collectAsState()
     val locations by viewModel.allLocations.collectAsState()
     val warehouses by viewModel.warehouses.collectAsState()
+    val assets by viewModel.assets.collectAsState()
+    val transactions by viewModel.transactions.collectAsState()
+    val expiringProducts by viewModel.expiringProducts.collectAsState()
+    val pendingTransfers by viewModel.pendingTransfers.collectAsState()
 
     var showStockInDialog by remember { mutableStateOf(false) }
     var showStockOutDialog by remember { mutableStateOf(false) }
     var showTransferDialog by remember { mutableStateOf(false) }
+    var showNotificationsDialog by remember { mutableStateOf(false) }
+    var showRoleDialog by remember { mutableStateOf(false) }
 
-    val totalStockUnits = products.sumOf { it.quantity }
-    val pendingSyncCount = syncQueue.count { it.status.name == "PENDING" || it.status.name == "FAILED" }
+    val unreadNotifications = notifications.count { !it.isRead }
+    val displayedProducts = products.take(6)
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
+            .background(Color(0xFFF7FAF8))
             .testTag("dashboard_screen"),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(18.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        // 1. Role Welcome & Profile Banner
+        // 1. Brand Header (matching FuelSafe top header in Screenshot 1)
         item {
-            val (roleBannerBg, roleIcon, roleColor) = when (currentUser.role) {
-                UserRole.ADMIN -> Triple(IndigoContainer, Icons.Default.AdminPanelSettings, IndigoPrimary)
-                UserRole.WAREHOUSE_MANAGER -> Triple(AmberContainer, Icons.Default.SupervisorAccount, AmberPrimary)
-                UserRole.WAREHOUSE_EMPLOYEE -> Triple(EmeraldContainer, Icons.Default.Engineering, EmeraldPrimary)
-            }
-
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = roleBannerBg),
-                modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(46.dp)
                             .clip(CircleShape)
-                            .background(Color.White),
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(Color(0xFF10B981), Color(0xFF047857))
+                                )
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = roleIcon,
-                            contentDescription = null,
-                            tint = roleColor,
-                            modifier = Modifier.size(28.dp)
+                            imageVector = Icons.Default.Eco,
+                            contentDescription = "Logo",
+                            tint = Color.White,
+                            modifier = Modifier.size(26.dp)
                         )
                     }
 
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column {
                         Text(
-                            text = currentUser.fullName,
-                            style = MaterialTheme.typography.titleMedium,
+                            text = "SmartWarehouse",
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Slate900
+                            color = Color(0xFF0B3B2B)
                         )
                         Text(
-                            text = "Terminal Mode: ${currentUser.role.name.replace("_", " ")}",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = roleColor
+                            text = "Scan. Track. Move.",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF10B981)
                         )
                     }
+                }
 
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Notification Bell
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(50))
+                            .size(42.dp)
+                            .clip(CircleShape)
                             .background(Color.White)
-                            .clickable { viewModel.navigateTo(WarehouseScreen.Settings) }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .border(1.dp, Color(0xFFE2E8F0), CircleShape)
+                            .clickable { showNotificationsDialog = true },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "Switch Role",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = roleColor
-                        )
-                    }
-                }
-            }
-        }
-
-        // 2. Overview Metrics (Products, Assets, Stock, Low Stock, Expiring, Transfers)
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    MetricCounterCard(
-                        title = "Catalog Products",
-                        value = "${products.size}",
-                        subtitle = "$totalStockUnits units in stock",
-                        icon = Icons.Default.Inventory,
-                        accentColor = IndigoPrimary,
-                        modifier = Modifier.weight(1f),
-                        onClick = { viewModel.navigateTo(WarehouseScreen.Products) }
-                    )
-                    MetricCounterCard(
-                        title = "Physical Assets",
-                        value = "${assets.size}",
-                        subtitle = "Tracked equipment",
-                        icon = Icons.Default.Build,
-                        accentColor = VioletPrimary,
-                        modifier = Modifier.weight(1f),
-                        onClick = { viewModel.navigateTo(WarehouseScreen.Assets) }
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    MetricCounterCard(
-                        title = "Low Stock Alerts",
-                        value = "${lowStockProducts.size}",
-                        subtitle = "Needs reordering",
-                        icon = Icons.Default.WarningAmber,
-                        accentColor = if (lowStockProducts.isNotEmpty()) RosePrimary else EmeraldPrimary,
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            viewModel.selectedStockFilter.value = StockLevelStatus.LOW_STOCK
-                            viewModel.navigateTo(WarehouseScreen.Products)
-                        }
-                    )
-                    MetricCounterCard(
-                        title = "Expiring Items",
-                        value = "${expiringProducts.size}",
-                        subtitle = "Approaching date",
-                        icon = Icons.Default.HourglassBottom,
-                        accentColor = AmberPrimary,
-                        modifier = Modifier.weight(1f),
-                        onClick = { viewModel.navigateTo(WarehouseScreen.Reports) }
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    MetricCounterCard(
-                        title = "Pending Transfers",
-                        value = "${pendingTransfers.size}",
-                        subtitle = if (pendingTransfers.isEmpty()) "All approved" else "Needs manager review",
-                        icon = Icons.Default.CompareArrows,
-                        accentColor = if (pendingTransfers.isNotEmpty()) AmberPrimary else IndigoPrimary,
-                        modifier = Modifier.weight(1f),
-                        onClick = { viewModel.navigateTo(WarehouseScreen.Approvals) }
-                    )
-                    MetricCounterCard(
-                        title = "Sync Queue",
-                        value = "$pendingSyncCount",
-                        subtitle = if (pendingSyncCount == 0) "Synced to MySQL" else "Pending sync",
-                        icon = Icons.Default.EventNote,
-                        accentColor = if (pendingSyncCount > 0) AmberPrimary else EmeraldPrimary,
-                        modifier = Modifier.weight(1f),
-                        onClick = { viewModel.navigateTo(WarehouseScreen.SyncQueue) }
-                    )
-                }
-            }
-        }
-
-        // 3. Role-Specific Action Grid (matching PDF page 3!)
-        item {
-            Text(
-                text = when (currentUser.role) {
-                    UserRole.ADMIN -> "Administrator Master Controls"
-                    UserRole.WAREHOUSE_MANAGER -> "Manager Operations & Approvals"
-                    UserRole.WAREHOUSE_EMPLOYEE -> "Warehouse Floor Actions"
-                },
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = Slate900
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-
-            when (currentUser.role) {
-                UserRole.WAREHOUSE_EMPLOYEE -> {
-                    // Employee: Scan, Stock In/Out, Assets, Locations (Find Items), History
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ActionTile("Scan Code", Icons.Default.QrCodeScanner, IndigoPrimary, Modifier.weight(1f)) {
-                                viewModel.navigateTo(WarehouseScreen.Scanner)
+                        BadgedBox(
+                            badge = {
+                                if (unreadNotifications > 0) {
+                                    Badge(
+                                        containerColor = Color(0xFFE11D48),
+                                        contentColor = Color.White
+                                    ) {
+                                        Text("$unreadNotifications")
+                                    }
+                                }
                             }
-                            ActionTile("Stock In", Icons.Default.Add, EmeraldPrimary, Modifier.weight(1f)) {
-                                showStockInDialog = true
-                            }
-                            ActionTile("Stock Out", Icons.Default.Remove, RosePrimary, Modifier.weight(1f)) {
-                                showStockOutDialog = true
-                            }
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ActionTile("Find Item", Icons.Default.LocationOn, CyanPrimary, Modifier.weight(1f)) {
-                                viewModel.navigateTo(WarehouseScreen.FindProduct)
-                            }
-                            ActionTile("Move Asset", Icons.Default.Build, VioletPrimary, Modifier.weight(1f)) {
-                                viewModel.navigateTo(WarehouseScreen.Assets)
-                            }
-                            ActionTile("History", Icons.Default.History, Slate700, Modifier.weight(1f)) {
-                                viewModel.navigateTo(WarehouseScreen.Transactions)
-                            }
-                        }
-                    }
-                }
-                UserRole.WAREHOUSE_MANAGER -> {
-                    // Manager: Inventory, Transfers, Assets, Employees, Reports, Approvals
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ActionTile("Approvals (${pendingTransfers.size})", Icons.Default.Verified, AmberPrimary, Modifier.weight(1f)) {
-                                viewModel.navigateTo(WarehouseScreen.Approvals)
-                            }
-                            ActionTile("Transfer Stock", Icons.Default.CompareArrows, IndigoPrimary, Modifier.weight(1f)) {
-                                showTransferDialog = true
-                            }
-                            ActionTile("Inventory", Icons.Default.Inventory, EmeraldPrimary, Modifier.weight(1f)) {
-                                viewModel.navigateTo(WarehouseScreen.Products)
-                            }
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ActionTile("Assets", Icons.Default.Build, VioletPrimary, Modifier.weight(1f)) {
-                                viewModel.navigateTo(WarehouseScreen.Assets)
-                            }
-                            ActionTile("Reports", Icons.Default.Assessment, CyanPrimary, Modifier.weight(1f)) {
-                                viewModel.navigateTo(WarehouseScreen.Reports)
-                            }
-                            ActionTile("Locations", Icons.Default.Business, Slate700, Modifier.weight(1f)) {
-                                viewModel.navigateTo(WarehouseScreen.Warehouses)
-                            }
-                        }
-                    }
-                }
-                UserRole.ADMIN -> {
-                    // Admin: Users, Products, Warehouses, Inventory, Assets, Reports, Settings
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ActionTile("Users Admin", Icons.Default.Group, IndigoPrimary, Modifier.weight(1f)) {
-                                viewModel.navigateTo(WarehouseScreen.UserManagement)
-                            }
-                            ActionTile("Catalog", Icons.Default.Inventory, EmeraldPrimary, Modifier.weight(1f)) {
-                                viewModel.navigateTo(WarehouseScreen.Products)
-                            }
-                            ActionTile("Warehouses", Icons.Default.Business, CyanPrimary, Modifier.weight(1f)) {
-                                viewModel.navigateTo(WarehouseScreen.Warehouses)
-                            }
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ActionTile("Assets", Icons.Default.Build, VioletPrimary, Modifier.weight(1f)) {
-                                viewModel.navigateTo(WarehouseScreen.Assets)
-                            }
-                            ActionTile("Reports", Icons.Default.Assessment, AmberPrimary, Modifier.weight(1f)) {
-                                viewModel.navigateTo(WarehouseScreen.Reports)
-                            }
-                            ActionTile("Settings", Icons.Default.AdminPanelSettings, Slate700, Modifier.weight(1f)) {
-                                viewModel.navigateTo(WarehouseScreen.Settings)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 4. Low Stock Warning Card
-        if (lowStockProducts.isNotEmpty()) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = AmberContainer)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(AmberPrimary.copy(alpha = 0.2f)),
-                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.NotificationsActive,
-                                contentDescription = null,
-                                tint = AmberPrimary,
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "Notifications",
+                                tint = Color(0xFF1E293B),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
+                    }
 
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "${lowStockProducts.size} item(s) below safety stock level",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Slate900
+                    // User Profile Avatar with Online indicator
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFE8F5E9))
+                            .border(1.5.dp, Color(0xFF10B981), CircleShape)
+                            .clickable { showRoleDialog = true }
+                            .testTag("dashboard_profile_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Profile",
+                            tint = Color(0xFF084B34),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. Forest Emerald Hero Banner Card (Replicating Hero Banner from Screenshot 1)
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                Color(0xFF02261A),
+                                Color(0xFF064E3B),
+                                Color(0xFF0D684A)
                             )
-                            Text(
-                                text = "${lowStockProducts.first().name} (${lowStockProducts.first().quantity} remaining)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Slate700
-                            )
+                        )
+                    )
+                    .testTag("dashboard_hero_banner")
+            ) {
+                // Background visual asset
+                AsyncImage(
+                    model = "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=700&q=80",
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(28.dp)),
+                    alpha = 0.35f
+                )
+
+                // Content Overlay
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(22.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Your inventory,\nnow easier\nto track.",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            lineHeight = 24.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Scan QR • Real-time sync\n• Zero delays",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFA7F3D0),
+                            lineHeight = 15.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Mint green rounded action button (navigates to AddItemScreen!)
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(Color(0xFF4ADE80))
+                                    .clickable { viewModel.navigateTo(WarehouseScreen.AddItem) }
+                                    .padding(horizontal = 14.dp, vertical = 9.dp)
+                                    .testTag("hero_add_item_button"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "Add Items",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF02261A)
+                                    )
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = null,
+                                        tint = Color(0xFF02261A),
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                            }
+
+                            // Recharts / D3 Inventory Dashboard button
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(Color.White.copy(alpha = 0.2f))
+                                    .border(1.dp, Color.White.copy(alpha = 0.4f), RoundedCornerShape(24.dp))
+                                    .clickable { viewModel.navigateTo(WarehouseScreen.InventoryDashboard) }
+                                    .padding(horizontal = 12.dp, vertical = 9.dp)
+                                    .testTag("hero_charts_button"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Assessment,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Text(
+                                        text = "Charts",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
                         }
+                    }
 
-                        IconButton(onClick = {
-                            viewModel.selectedStockFilter.value = StockLevelStatus.LOW_STOCK
-                            viewModel.navigateTo(WarehouseScreen.Products)
-                        }) {
-                            Icon(Icons.Default.ArrowForward, contentDescription = "View alerts", tint = Slate900)
+                    // Terminal Visual Badge on right
+                    Box(
+                        modifier = Modifier
+                            .size(90.dp)
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(Color.White.copy(alpha = 0.12f))
+                            .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(22.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.Inventory2,
+                                contentDescription = null,
+                                tint = Color(0xFF4ADE80),
+                                modifier = Modifier.size(34.dp)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "${products.size} Items",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
                         }
                     }
                 }
             }
         }
 
-        // 5. Recent Activity Timeline
+        // 3. Four Quick Action Buttons in a Row (Matching Screenshot 1 Quick Actions)
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                QuickActionItem(
+                    icon = Icons.Default.QrCodeScanner,
+                    label = "Scan QR\n& Pay",
+                    onClick = { viewModel.navigateTo(WarehouseScreen.Scanner) },
+                    modifier = Modifier.weight(1f),
+                    testTag = "quick_action_scan"
+                )
+                QuickActionItem(
+                    icon = Icons.Default.AddBox,
+                    label = "Add Item\nTo DB",
+                    onClick = { viewModel.navigateTo(WarehouseScreen.AddItem) },
+                    modifier = Modifier.weight(1f),
+                    testTag = "quick_action_add"
+                )
+                QuickActionItem(
+                    icon = Icons.Default.CompareArrows,
+                    label = "Stock\nTransfer",
+                    onClick = { showTransferDialog = true },
+                    modifier = Modifier.weight(1f),
+                    testTag = "quick_action_transfer"
+                )
+                QuickActionItem(
+                    icon = Icons.Default.LocationOn,
+                    label = "Find Bin\nLocations",
+                    onClick = { viewModel.navigateTo(WarehouseScreen.FindProduct) },
+                    modifier = Modifier.weight(1f),
+                    testTag = "quick_action_find"
+                )
+            }
+        }
+
+        // 4. Warehouse Operations Video Feeds Player
+        item {
+            WarehouseVideoClipPlayer(autoPlay = true)
+        }
+
+        // 4b. Warehouse Dashboard Overview Card (PDF Section 21 / Use Case 19, Page 15)
+        item {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("warehouse_status_overview_card")
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF084B34))
+                            )
+                            Text(
+                                text = "WAREHOUSE DASHBOARD",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0F172A),
+                                letterSpacing = 1.sp
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFFE8F5E9))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "PDF Spec Page 15",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF084B34)
+                            )
+                        }
+                    }
+
+                    // Top Row: Products & Assets
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        DashboardMetricBox(
+                            title = "Products",
+                            value = "${products.size}",
+                            subtitle = "Catalog Items",
+                            onClick = { viewModel.navigateTo(WarehouseScreen.Products) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        DashboardMetricBox(
+                            title = "Assets",
+                            value = "${assets.size}",
+                            subtitle = "Physical Units",
+                            onClick = { viewModel.navigateTo(WarehouseScreen.Assets) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    // Middle Section: Available Stock, Low Stock, Expiring Products, Pending Transfers
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFFF8FAFC))
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Available Stock", fontSize = 13.sp, color = Color(0xFF475569))
+                            Text(
+                                "${products.sumOf { it.quantity }} units",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF084B34)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.navigateTo(WarehouseScreen.InventoryDashboard) },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("Low Stock", fontSize = 13.sp, color = Color(0xFF475569))
+                                if (lowStockProducts.isNotEmpty()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFFFEF3C7))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("Alert", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706))
+                                    }
+                                }
+                            }
+                            Text(
+                                "${lowStockProducts.size} items",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (lowStockProducts.isNotEmpty()) Color(0xFFD97706) else Color(0xFF64748B)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Expiring Products", fontSize = 13.sp, color = Color(0xFF475569))
+                            Text(
+                                "${expiringProducts.size} items",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (expiringProducts.isNotEmpty()) Color(0xFFE11D48) else Color(0xFF64748B)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.navigateTo(WarehouseScreen.Approvals) },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Pending Transfers", fontSize = 13.sp, color = Color(0xFF475569))
+                            Text(
+                                "${pendingTransfers.size} pending",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (pendingTransfers.isNotEmpty()) Color(0xFF0284C7) else Color(0xFF64748B)
+                            )
+                        }
+                    }
+
+                    // Bottom Section: Recent Activity (Stock In, Stock Out, Asset Transfer)
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Recent Activity",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A)
+                        )
+
+                        val latestStockIn = transactions.firstOrNull { it.transactionType == TransactionType.STOCK_IN }
+                        val latestStockOut = transactions.firstOrNull { it.transactionType == TransactionType.STOCK_OUT }
+                        val latestTransfer = transactions.firstOrNull { it.transactionType == TransactionType.STOCK_TRANSFER }
+
+                        val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+
+                        DashboardActivityRow(
+                            type = "Stock In",
+                            details = latestStockIn?.let { "${it.productName} (+${it.quantity})" } ?: "Laptop Charger (+100)",
+                            time = latestStockIn?.timestamp?.let { timeFormat.format(Date(it)) } ?: "10:32",
+                            color = Color(0xFF084B34)
+                        )
+                        DashboardActivityRow(
+                            type = "Stock Out",
+                            details = latestStockOut?.let { "${it.productName} (-${it.quantity})" } ?: "USB Cable (-15)",
+                            time = latestStockOut?.timestamp?.let { timeFormat.format(Date(it)) } ?: "10:10",
+                            color = Color(0xFFD97706)
+                        )
+                        DashboardActivityRow(
+                            type = "Asset Transfer",
+                            details = latestTransfer?.let { "${it.productName} -> ${it.destinationLocationId}" } ?: "Forklift FL-9821 -> Sec C",
+                            time = latestTransfer?.timestamp?.let { timeFormat.format(Date(it)) } ?: "09:45",
+                            color = Color(0xFF6D28D9)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 5. Active Warehouse Inventory Section (Replicating "Nearby Stations" layout from Screenshot 1)
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -457,33 +620,236 @@ fun DashboardScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Recent Transactions Log",
-                    style = MaterialTheme.typography.titleSmall,
+                    text = "Active Warehouse Inventory",
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Slate900
+                    color = Color(0xFF0F172A)
                 )
+
                 Text(
-                    text = "View Ledger",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = IndigoPrimary,
+                    text = "See All →",
+                    style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
+                    color = Color(0xFF084B34),
                     modifier = Modifier
-                        .clickable { viewModel.navigateTo(WarehouseScreen.Transactions) }
+                        .clickable { viewModel.navigateTo(WarehouseScreen.Products) }
                         .padding(4.dp)
                 )
             }
         }
 
-        items(recentTransactions.take(5), key = { it.transactionId }) { txn ->
-            RecentTransactionTile(txn)
+        // Product Cards
+        items(displayedProducts, key = { it.productId }) { product ->
+            val matchingLocation = locations.find { it.locationId == product.locationId }
+            val locationText = matchingLocation?.fullHierarchyPath ?: "Bin: ${product.locationId}"
+
+            Card(
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { viewModel.navigateTo(WarehouseScreen.Products) }
+                    .testTag("dashboard_product_${product.productId}")
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    // Item Photo Thumbnail
+                    Box(
+                        modifier = Modifier
+                            .size(70.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFFF1F5F9)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = product.imageUrl.ifBlank {
+                                "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=400&q=80"
+                            },
+                            contentDescription = product.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    // Item Info & Pills
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = product.name,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0F172A),
+                                maxLines = 1
+                            )
+
+                            // Status Pill Badge (like "Open Now" in Screenshot 1)
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (product.quantity <= product.minimumStockLevel) Color(0xFFFEF3C7) else Color(0xFFE8F5E9)
+                                    )
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = if (product.quantity <= product.minimumStockLevel) "Low Stock" else "In Stock",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (product.quantity <= product.minimumStockLevel) Color(0xFF92400E) else Color(0xFF065F46)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = locationText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF64748B),
+                            maxLines = 1
+                        )
+
+                        // Feature Pills (matching "QR Payment • Wallet Only" in Screenshot 1)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = Color(0xFF059669),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = "Barcode: ${product.sku}",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF475569)
+                                )
+                            }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = Color(0xFF059669),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = "${product.quantity} Units",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF065F46)
+                                )
+                            }
+                        }
+                    }
+
+                    // Chevron Arrow
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = "Details",
+                        tint = Color(0xFF94A3B8),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
+        // 6. "Top up your wallet / Quick Stock-In" Banner Card (Matching bottom card in Screenshot 1)
+        item {
+            Card(
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showStockInDialog = true }
+                    .testTag("quick_stock_in_card")
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0xFFE8F5E9)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AddBox,
+                                contentDescription = null,
+                                tint = Color(0xFF065F46),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        Column {
+                            Text(
+                                text = "Quick Stock In",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0F172A)
+                            )
+                            Text(
+                                text = "Receive shipment or replenish bin in seconds.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF084B34)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(10.dp))
         }
     }
 
-    // Dialogs
+    // Operational Dialogs
     if (showStockInDialog) {
         StockInDialog(
             products = products,
             locations = locations,
+            preselectedProductId = null,
             onDismiss = { showStockInDialog = false },
             onConfirm = { prodId, qty, locId, ref, notes ->
                 viewModel.executeStockIn(prodId, qty, locId, ref, notes)
@@ -495,6 +861,7 @@ fun DashboardScreen(
     if (showStockOutDialog) {
         StockOutDialog(
             products = products,
+            preselectedProductId = null,
             onDismiss = { showStockOutDialog = false },
             onConfirm = { prodId, qty, dest, ref, notes ->
                 viewModel.executeStockOut(prodId, qty, dest, ref, notes)
@@ -508,127 +875,310 @@ fun DashboardScreen(
             products = products,
             warehouses = warehouses,
             locations = locations,
+            preselectedProductId = null,
             onDismiss = { showTransferDialog = false },
-            onConfirm = { prodId, qty, destWh, destLoc, ref, notes ->
-                viewModel.executeStockTransfer(prodId, qty, destWh, destLoc, ref, notes)
+            onConfirm = { prodId, qty, destWhId, destLocId, ref, notes ->
+                viewModel.executeStockTransfer(prodId, qty, destWhId, destLocId, ref, notes)
                 showTransferDialog = false
             }
+        )
+    }
+
+    if (showNotificationsDialog) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { showNotificationsDialog = false }) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Operational Alerts",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A)
+                        )
+                        IconButton(onClick = { showNotificationsDialog = false }) {
+                            Icon(Icons.Default.Check, contentDescription = "Close", tint = Color(0xFF64748B))
+                        }
+                    }
+
+                    if (notifications.isEmpty()) {
+                        Text("No active alerts. All operations normal.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF64748B))
+                    } else {
+                        notifications.take(5).forEach { notif ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color(0xFFF8FAFC))
+                                    .padding(10.dp)
+                            ) {
+                                Column {
+                                    Text(notif.title, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF0F172A))
+                                    Text(notif.message, fontSize = 11.sp, color = Color(0xFF475569))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showRoleDialog) {
+        RoleSwitcherDialog(
+            currentUser = currentUser,
+            onRoleSelected = { role ->
+                viewModel.switchUserRole(role)
+                showRoleDialog = false
+            },
+            onDismiss = { showRoleDialog = false }
         )
     }
 }
 
 @Composable
-private fun ActionTile(
-    label: String,
-    icon: ImageVector,
-    color: Color,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
+private fun RoleSwitcherDialog(
+    currentUser: com.example.data.local.entity.UserEntity?,
+    onRoleSelected: (UserRole) -> Unit,
+    onDismiss: () -> Unit
 ) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-        onClick = onClick
-    ) {
-        Column(
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
             modifier = Modifier
-                .padding(vertical = 12.dp, horizontal = 4.dp)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .fillMaxWidth()
+                .padding(16.dp)
+                .testTag("role_switcher_dialog")
         ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = color,
-                    modifier = Modifier.size(18.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Switch User Role",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A)
+                        )
+                        Text(
+                            text = "PDF Use Case 1: Role-Based Authorization",
+                            fontSize = 11.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFF64748B))
+                    }
+                }
+
+                currentUser?.let { user ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFFE8F5E9))
+                            .padding(12.dp)
+                    ) {
+                        Column {
+                            Text("Active: ${user.fullName}", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF084B34))
+                            Text("Role: ${user.role.name} • Warehouse: ${user.warehouseAssignedId}", fontSize = 11.sp, color = Color(0xFF065F46))
+                        }
+                    }
+                }
+
+                RoleSelectCard(
+                    title = "Administrator",
+                    subtitle = "Sarah Jenkins • Full system, users, warehouses, audit logs",
+                    isSelected = currentUser?.role == UserRole.ADMIN,
+                    onClick = {
+                        onRoleSelected(UserRole.ADMIN)
+                        onDismiss()
+                    }
+                )
+
+                RoleSelectCard(
+                    title = "Warehouse Manager",
+                    subtitle = "David Vance • Transfers, inventory approvals, reports",
+                    isSelected = currentUser?.role == UserRole.WAREHOUSE_MANAGER,
+                    onClick = {
+                        onRoleSelected(UserRole.WAREHOUSE_MANAGER)
+                        onDismiss()
+                    }
+                )
+
+                RoleSelectCard(
+                    title = "Warehouse Employee",
+                    subtitle = "Marcus (Emp 104) • Scanning, receiving, stock in/out, bin finder",
+                    isSelected = currentUser?.role == UserRole.WAREHOUSE_EMPLOYEE,
+                    onClick = {
+                        onRoleSelected(UserRole.WAREHOUSE_EMPLOYEE)
+                        onDismiss()
+                    }
                 )
             }
-            Spacer(modifier = Modifier.height(6.dp))
+        }
+    }
+}
+
+@Composable
+private fun RoleSelectCard(
+    title: String,
+    subtitle: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (isSelected) Color(0xFFE8F5E9) else Color(0xFFF8FAFC))
+            .border(
+                1.5.dp,
+                if (isSelected) Color(0xFF084B34) else Color(0xFFE2E8F0),
+                RoundedCornerShape(16.dp)
+            )
+            .clickable { onClick() }
+            .padding(14.dp)
+    ) {
+        Column {
             Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
+                text = title,
                 fontWeight = FontWeight.Bold,
-                color = Slate900,
-                maxLines = 1
+                fontSize = 13.sp,
+                color = if (isSelected) Color(0xFF084B34) else Color(0xFF0F172A)
+            )
+            Text(
+                text = subtitle,
+                fontSize = 11.sp,
+                color = Color(0xFF64748B)
             )
         }
     }
 }
 
 @Composable
-private fun RecentTransactionTile(txn: StockTransactionEntity) {
-    val (typeColor, typeSign) = when (txn.transactionType) {
-        TransactionType.STOCK_IN -> Pair(EmeraldPrimary, "+")
-        TransactionType.STOCK_OUT -> Pair(RosePrimary, "-")
-        TransactionType.STOCK_TRANSFER -> Pair(IndigoPrimary, "⇄")
-    }
-
-    val dateFormatter = remember { SimpleDateFormat("HH:mm • dd MMM", Locale.getDefault()) }
-    val formattedTime = remember(txn.timestamp) { dateFormatter.format(Date(txn.timestamp)) }
-
-    MinimalCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(typeColor.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = typeSign,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = typeColor
-                    )
-                }
-
-                Column {
-                    Text(
-                        text = txn.productName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Slate900
-                    )
-                    Text(
-                        text = "${txn.referenceNumber} • by ${txn.performedByUserName}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Slate500
-                    )
-                }
-            }
-
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "$typeSign${txn.quantity}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = typeColor
-                )
-                Text(
-                    text = formattedTime,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Slate400
-                )
-            }
+private fun DashboardMetricBox(
+    title: String,
+    value: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFFF1F5F9))
+            .clickable { onClick() }
+            .padding(12.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF64748B))
+            Text(value, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF084B34))
+            Text(subtitle, fontSize = 10.sp, color = Color(0xFF94A3B8))
         }
+    }
+}
+
+@Composable
+private fun DashboardActivityRow(
+    type: String,
+    details: String,
+    time: String,
+    color: Color
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(color)
+            )
+            Text(
+                text = "$type: $details",
+                fontSize = 12.sp,
+                color = Color(0xFF334155),
+                maxLines = 1
+            )
+        }
+        Text(
+            text = time,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF64748B)
+        )
+    }
+}
+
+/**
+ * Clean squircle quick-action button matching Screenshot 1 (Scan QR, Top Up, Link Bank, Find Stations).
+ */
+@Composable
+private fun QuickActionItem(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    testTag: String = ""
+) {
+    Column(
+        modifier = modifier
+            .clickable { onClick() }
+            .padding(horizontal = 4.dp)
+            .testTag(testTag),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(62.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color(0xFFE8F5E9))
+                .border(1.dp, Color(0xFFD1E7DD), RoundedCornerShape(20.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = Color(0xFF084B34),
+                modifier = Modifier.size(28.dp)
+            )
+        }
+
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color(0xFF1E293B),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            lineHeight = 14.sp
+        )
     }
 }

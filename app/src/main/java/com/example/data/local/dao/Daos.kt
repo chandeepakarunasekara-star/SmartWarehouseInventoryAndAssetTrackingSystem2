@@ -122,6 +122,12 @@ interface WarehouseDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSuppliers(suppliers: List<SupplierEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSupplier(supplier: SupplierEntity)
+
+    @Query("DELETE FROM suppliers WHERE supplierId = :id")
+    suspend fun deleteSupplierById(id: String)
 }
 
 /**

@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Build
@@ -80,16 +81,21 @@ import com.example.domain.model.UserRole
 import com.example.ui.components.MinimalButton
 import com.example.ui.components.MinimalCard
 import com.example.ui.components.SyncStatusChip
+import com.example.ui.screens.AddItemScreen
 import com.example.ui.screens.ApprovalsScreen
 import com.example.ui.screens.AssetManagementScreen
+import com.example.ui.screens.AuditLogScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.FindProductScreen
 import com.example.ui.screens.HardwarePeripheralsScreen
+import com.example.ui.screens.InventoryDashboardScreen
 import com.example.ui.screens.LoginScreen
 import com.example.ui.screens.ProductListScreen
 import com.example.ui.screens.ReportsScreen
+import com.example.ui.screens.SuppliersScreen
 import com.example.ui.screens.ScannerScreen
 import com.example.ui.screens.SettingsScreen
+import com.example.ui.screens.SignUpScreen
 import com.example.ui.screens.SyncQueueScreen
 import com.example.ui.screens.TransactionHistoryScreen
 import com.example.ui.screens.UserManagementScreen
@@ -145,13 +151,18 @@ fun MainWarehouseLayout(
     }
 
     // Predictive back navigation handling
-    BackHandler(enabled = currentScreen !is WarehouseScreen.Dashboard && currentScreen !is WarehouseScreen.Login) {
+    BackHandler(enabled = currentScreen !is WarehouseScreen.Dashboard && currentScreen !is WarehouseScreen.Login && currentScreen !is WarehouseScreen.SignUp) {
         viewModel.navigateBack()
     }
 
-    // If current screen is Login, display the full login interface
+    // If current screen is Login or SignUp, display the respective interface
     if (currentScreen is WarehouseScreen.Login) {
         LoginScreen(viewModel = viewModel)
+        return
+    }
+
+    if (currentScreen is WarehouseScreen.SignUp) {
+        SignUpScreen(viewModel = viewModel)
         return
     }
 
@@ -167,6 +178,7 @@ fun MainWarehouseLayout(
                         Text(
                             text = when (currentScreen) {
                                 is WarehouseScreen.Dashboard -> "Smart Warehouse"
+                                is WarehouseScreen.AddItem -> "Add Warehouse Item"
                                 is WarehouseScreen.Products -> "Product Catalog"
                                 is WarehouseScreen.Scanner -> "Barcode & QR Scanner"
                                 is WarehouseScreen.Assets -> "Asset Management"
@@ -254,10 +266,11 @@ fun MainWarehouseLayout(
                     selected = currentScreen is WarehouseScreen.Dashboard,
                     onClick = { viewModel.navigateTo(WarehouseScreen.Dashboard) },
                     icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard") },
-                    label = { Text("Overview", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    label = { Text("Home", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = IndigoContainer,
-                        selectedIconColor = IndigoOnContainer
+                        indicatorColor = Color(0xFFE8F5E9),
+                        selectedIconColor = Color(0xFF084B34),
+                        selectedTextColor = Color(0xFF084B34)
                     ),
                     modifier = Modifier.testTag("nav_dashboard")
                 )
@@ -266,12 +279,26 @@ fun MainWarehouseLayout(
                     selected = currentScreen is WarehouseScreen.Products,
                     onClick = { viewModel.navigateTo(WarehouseScreen.Products) },
                     icon = { Icon(Icons.Default.Inventory2, contentDescription = "Products") },
-                    label = { Text("Products", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    label = { Text("Catalog", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = IndigoContainer,
-                        selectedIconColor = IndigoOnContainer
+                        indicatorColor = Color(0xFFE8F5E9),
+                        selectedIconColor = Color(0xFF084B34),
+                        selectedTextColor = Color(0xFF084B34)
                     ),
                     modifier = Modifier.testTag("nav_products")
+                )
+
+                NavigationBarItem(
+                    selected = currentScreen is WarehouseScreen.AddItem,
+                    onClick = { viewModel.navigateTo(WarehouseScreen.AddItem) },
+                    icon = { Icon(Icons.Default.AddCircle, contentDescription = "Add Item") },
+                    label = { Text("Add Item", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    colors = NavigationBarItemDefaults.colors(
+                        indicatorColor = Color(0xFFE8F5E9),
+                        selectedIconColor = Color(0xFF084B34),
+                        selectedTextColor = Color(0xFF084B34)
+                    ),
+                    modifier = Modifier.testTag("nav_add_item")
                 )
 
                 NavigationBarItem(
@@ -280,26 +307,16 @@ fun MainWarehouseLayout(
                     icon = { Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan") },
                     label = { Text("Scan", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = EmeraldContainer,
-                        selectedIconColor = EmeraldOnContainer
+                        indicatorColor = Color(0xFFE8F5E9),
+                        selectedIconColor = Color(0xFF084B34),
+                        selectedTextColor = Color(0xFF084B34)
                     ),
                     modifier = Modifier.testTag("nav_scanner")
                 )
 
                 NavigationBarItem(
-                    selected = currentScreen is WarehouseScreen.Assets,
-                    onClick = { viewModel.navigateTo(WarehouseScreen.Assets) },
-                    icon = { Icon(Icons.Default.Build, contentDescription = "Assets") },
-                    label = { Text("Assets", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = IndigoContainer,
-                        selectedIconColor = IndigoOnContainer
-                    ),
-                    modifier = Modifier.testTag("nav_assets")
-                )
-
-                NavigationBarItem(
                     selected = showMoreMenuSheet ||
+                        currentScreen is WarehouseScreen.Assets ||
                         currentScreen is WarehouseScreen.Warehouses ||
                         currentScreen is WarehouseScreen.Transactions ||
                         currentScreen is WarehouseScreen.SyncQueue ||
@@ -313,8 +330,9 @@ fun MainWarehouseLayout(
                     icon = { Icon(Icons.Default.MoreHoriz, contentDescription = "More") },
                     label = { Text("More", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = IndigoContainer,
-                        selectedIconColor = IndigoOnContainer
+                        indicatorColor = Color(0xFFE8F5E9),
+                        selectedIconColor = Color(0xFF084B34),
+                        selectedTextColor = Color(0xFF084B34)
                     ),
                     modifier = Modifier.testTag("nav_more")
                 )
@@ -330,6 +348,10 @@ fun MainWarehouseLayout(
         ) {
             when (currentScreen) {
                 is WarehouseScreen.Dashboard -> DashboardScreen(viewModel = viewModel)
+                is WarehouseScreen.InventoryDashboard -> InventoryDashboardScreen(viewModel = viewModel)
+                is WarehouseScreen.AddItem -> AddItemScreen(viewModel = viewModel)
+                is WarehouseScreen.Suppliers -> SuppliersScreen(viewModel = viewModel)
+                is WarehouseScreen.AuditLog -> AuditLogScreen(viewModel = viewModel)
                 is WarehouseScreen.Products -> ProductListScreen(viewModel = viewModel)
                 is WarehouseScreen.Scanner -> ScannerScreen(viewModel = viewModel)
                 is WarehouseScreen.Assets -> AssetManagementScreen(viewModel = viewModel)
@@ -367,6 +389,16 @@ fun MainWarehouseLayout(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = Slate900
+                )
+
+                MoreMenuItem(
+                    title = "Inventory Dashboard (Recharts / D3)",
+                    subtitle = "Interactive summary bar chart of stock levels & low-stock alerts",
+                    icon = Icons.Default.Assessment,
+                    onClick = {
+                        showMoreMenuSheet = false
+                        viewModel.navigateTo(WarehouseScreen.InventoryDashboard)
+                    }
                 )
 
                 MoreMenuItem(
@@ -446,6 +478,26 @@ fun MainWarehouseLayout(
                     onClick = {
                         showMoreMenuSheet = false
                         viewModel.navigateTo(WarehouseScreen.Reports)
+                    }
+                )
+
+                MoreMenuItem(
+                    title = "Suppliers Management",
+                    subtitle = "Manage vendor contacts, procurement catalog, and linkage",
+                    icon = Icons.Default.Business,
+                    onClick = {
+                        showMoreMenuSheet = false
+                        viewModel.navigateTo(WarehouseScreen.Suppliers)
+                    }
+                )
+
+                MoreMenuItem(
+                    title = "System Audit Logs",
+                    subtitle = "Immutable record of logins, stock ops, and administrative changes",
+                    icon = Icons.Default.History,
+                    onClick = {
+                        showMoreMenuSheet = false
+                        viewModel.navigateTo(WarehouseScreen.AuditLog)
                     }
                 )
 

@@ -14,23 +14,28 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
-import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Engineering
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SupervisorAccount
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warehouse
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,40 +44,45 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.auth.FirebaseAuthManager
 import com.example.domain.model.UserRole
 import com.example.ui.components.MinimalButton
 import com.example.ui.theme.AmberPrimary
 import com.example.ui.theme.EmeraldPrimary
 import com.example.ui.theme.IndigoPrimary
-import com.example.ui.theme.MutedAmber
 import com.example.ui.theme.Slate100
-import com.example.ui.theme.Slate200
 import com.example.ui.theme.Slate500
 import com.example.ui.theme.Slate600
 import com.example.ui.theme.Slate700
 import com.example.ui.theme.Slate900
-import com.example.ui.theme.VioletPrimary
 import com.example.ui.viewmodel.WarehouseScreen
 import com.example.ui.viewmodel.WarehouseViewModel
 
 /**
- * Login & User Authentication screen (Use Case 1).
- * Authenticates credentials, determines user role, and routes to role-specific dashboard.
+ * Login & User Authentication screen (Use Case 1) with Material3 theme and rounded corners.
+ * Authenticates credentials via Firebase Auth with email/password validation
+ * and provides navigation flow to SignUpScreen.
  */
 @Composable
 fun LoginScreen(
     viewModel: WarehouseViewModel,
     modifier: Modifier = Modifier
 ) {
-    var username by remember { mutableStateOf("emp_104") }
+    var emailOrUsername by remember { mutableStateOf("employee@smartwarehouse.net") }
     var password by remember { mutableStateOf("warehouse123") }
+    var passwordVisible by remember { mutableStateOf(false) }
     var selectedRole by remember { mutableStateOf(UserRole.WAREHOUSE_EMPLOYEE) }
+
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -133,25 +143,88 @@ fun LoginScreen(
                     color = Slate900
                 )
 
+                // Error Banner if present
+                if (errorMessage != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFFFFE4E6))
+                            .border(1.dp, Color(0xFFF43F5E), RoundedCornerShape(14.dp))
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ErrorOutline,
+                                contentDescription = null,
+                                tint = Color(0xFFE11D48),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = errorMessage ?: "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF9F1239),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                // Email / Username Input
+                val isEmailFormat = emailOrUsername.contains("@")
+                val isEmailValid = !isEmailFormat || FirebaseAuthManager.isValidEmail(emailOrUsername)
                 OutlinedTextField(
-                    value = username,
-                    onValueChange = { username = it },
-                    label = { Text("Username / Employee ID") },
-                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Slate500) },
+                    value = emailOrUsername,
+                    onValueChange = {
+                        emailOrUsername = it
+                        errorMessage = null
+                    },
+                    label = { Text("Email Address / Employee ID") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = if (isEmailFormat) Icons.Default.Email else Icons.Default.Person,
+                            contentDescription = null,
+                            tint = Slate500
+                        )
+                    },
+                    isError = isEmailFormat && !isEmailValid,
+                    supportingText = if (isEmailFormat && !isEmailValid) {
+                        { Text("Please enter a valid email address", color = MaterialTheme.colorScheme.error) }
+                    } else null,
                     singleLine = true,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth().testTag("login_username_input")
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("login_username_input")
                 )
 
+                // Password Input with Visibility Toggle
                 OutlinedTextField(
                     value = password,
-                    onValueChange = { password = it },
+                    onValueChange = {
+                        password = it
+                        errorMessage = null
+                    },
                     label = { Text("Password") },
                     leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = Slate500) },
-                    visualTransformation = PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                                tint = Slate500
+                            )
+                        }
+                    },
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     singleLine = true,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth().testTag("login_password_input")
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("login_password_input")
                 )
 
                 Text(
@@ -172,7 +245,7 @@ fun LoginScreen(
                         color = EmeraldPrimary,
                         onClick = {
                             selectedRole = UserRole.WAREHOUSE_EMPLOYEE
-                            username = "emp_104"
+                            emailOrUsername = "employee@smartwarehouse.net"
                         },
                         modifier = Modifier.weight(1f)
                     )
@@ -184,7 +257,7 @@ fun LoginScreen(
                         color = AmberPrimary,
                         onClick = {
                             selectedRole = UserRole.WAREHOUSE_MANAGER
-                            username = "mgr_david"
+                            emailOrUsername = "manager@smartwarehouse.net"
                         },
                         modifier = Modifier.weight(1f)
                     )
@@ -196,26 +269,91 @@ fun LoginScreen(
                         color = IndigoPrimary,
                         onClick = {
                             selectedRole = UserRole.ADMIN
-                            username = "admin_sarah"
+                            emailOrUsername = "admin@smartwarehouse.net"
                         },
                         modifier = Modifier.weight(1f)
                     )
                 }
 
-                MinimalButton(
-                    text = "Log In",
-                    onClick = { viewModel.login(username, selectedRole) },
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Sign In Button
+                if (isLoading) {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = IndigoPrimary, modifier = Modifier.size(36.dp))
+                    }
+                } else {
+                    MinimalButton(
+                        text = "Sign In with Firebase Auth",
+                        onClick = {
+                            if (emailOrUsername.isBlank()) {
+                                errorMessage = "Please enter an email or username."
+                                return@MinimalButton
+                            }
+                            if (emailOrUsername.contains("@") && !FirebaseAuthManager.isValidEmail(emailOrUsername)) {
+                                errorMessage = "Please enter a valid email address."
+                                return@MinimalButton
+                            }
+                            val (passValid, passErr) = FirebaseAuthManager.validatePassword(password)
+                            if (!passValid) {
+                                errorMessage = passErr ?: "Password must be at least 6 characters."
+                                return@MinimalButton
+                            }
+
+                            isLoading = true
+                            errorMessage = null
+                            val emailToAuth = if (emailOrUsername.contains("@")) {
+                                emailOrUsername.trim()
+                            } else {
+                                "${emailOrUsername.trim().lowercase()}@smartwarehouse.net"
+                            }
+
+                            viewModel.firebaseLogin(
+                                email = emailToAuth,
+                                password = password,
+                                role = selectedRole
+                            ) { success, err ->
+                                isLoading = false
+                                if (!success) {
+                                    errorMessage = err ?: "Sign in failed."
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        testTag = "login_submit_button"
+                    )
+                }
+
+                // Switch to Sign Up Flow
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    testTag = "login_submit_button"
-                )
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Don't have an account?",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate600
+                    )
+                    TextButton(
+                        onClick = { viewModel.navigateTo(WarehouseScreen.SignUp) },
+                        modifier = Modifier.testTag("switch_to_signup_button")
+                    ) {
+                        Text(
+                            text = "Create Account",
+                            color = IndigoPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
         // Info footer
         Text(
-            text = "Role-based access enforced by Room DB & Spring Boot backend",
+            text = "Secured with Firebase Authentication & Local Room DB",
             style = MaterialTheme.typography.labelSmall,
             color = Slate500
         )
@@ -228,7 +366,7 @@ private fun RoleSelectPill(
     role: UserRole,
     isSelected: Boolean,
     icon: ImageVector,
-    color: androidx.compose.ui.graphics.Color,
+    color: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {

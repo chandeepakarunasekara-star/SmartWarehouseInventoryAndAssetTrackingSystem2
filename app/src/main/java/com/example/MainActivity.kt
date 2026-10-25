@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
         val repository = WarehouseRepository(database)
 
         // Factory instantiates WarehouseViewModel with repository dependency injection
-        val viewModelFactory = WarehouseViewModelFactory(repository)
+        val viewModelFactory = WarehouseViewModelFactory(repository, applicationContext)
 
         setContent {
             // Apply minimalist UI theme with muted palette and rounded components

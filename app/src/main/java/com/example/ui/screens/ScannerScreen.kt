@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.model.StockLevelStatus
 import com.example.ui.components.AssetStatusBadge
+import com.example.ui.components.BarcodeScanner
 import com.example.ui.components.MinimalButton
 import com.example.ui.components.MinimalCard
 import com.example.ui.components.MinimalOutlinedButton
@@ -97,22 +98,8 @@ fun ScannerScreen(
     val locations by viewModel.allLocations.collectAsState()
 
     var manualCodeInput by remember { mutableStateOf("") }
-    var flashEnabled by remember { mutableStateOf(false) }
-
     var showStockInForScanned by remember { mutableStateOf(false) }
     var showStockOutForScanned by remember { mutableStateOf(false) }
-
-    // Pulsing laser animation in the viewfinder
-    val infiniteTransition = rememberInfiniteTransition(label = "laser")
-    val laserOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "laserOffset"
-    )
 
     Column(
         modifier = modifier
@@ -123,81 +110,16 @@ fun ScannerScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 1. Scanner Camera Viewfinder (Minimalist Rounded Frame)
-        Box(
+        // 1. Live CameraX + Google ML Kit Barcode Scanner
+        BarcodeScanner(
+            onBarcodeScanned = { code ->
+                viewModel.handleScannedCode(code)
+            },
+            lastScannedBarcode = scannedCode,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(240.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(Slate950),
-            contentAlignment = Alignment.Center
-        ) {
-            // Viewfinder reticle
-            Box(
-                modifier = Modifier
-                    .size(190.dp, 150.dp)
-                    .border(2.dp, SageTeal.copy(alpha = 0.8f), RoundedCornerShape(18.dp))
-            ) {
-                // Animated laser beam
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .padding(top = (150 * laserOffset).dp)
-                        .background(SageTeal)
-                )
-            }
-
-            // Flashlight & target overlays
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .align(Alignment.TopCenter),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(SageTeal)
-                    )
-                    Text(
-                        text = "Camera Active",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White
-                    )
-                }
-
-                IconButton(
-                    onClick = { flashEnabled = !flashEnabled },
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(if (flashEnabled) SageTeal else Slate800)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.FlashOn,
-                        contentDescription = "Toggle flashlight",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-
-            Text(
-                text = "Align barcode or QR within frame",
-                style = MaterialTheme.typography.labelSmall,
-                color = Slate400,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 12.dp)
-            )
-        }
+                .height(260.dp)
+        )
 
         // 2. Emulator Simulation Shortcuts (Quick Barcode Taps)
         Column(modifier = Modifier.fillMaxWidth()) {

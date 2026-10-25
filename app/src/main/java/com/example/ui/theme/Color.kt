@@ -16,10 +16,19 @@ val Slate100 = Color(0xFFF1F5F9)
 val Slate50  = Color(0xFFF8FAFC)
 
 // Vibrant Emerald / Mint (Stock In, In-Stock, Healthy, Success)
-val EmeraldPrimary = Color(0xFF059669)
+val EmeraldPrimary = Color(0xFF084B34)
 val EmeraldLight = Color(0xFF10B981)
-val EmeraldContainer = Color(0xFFD1FAE5)
+val EmeraldContainer = Color(0xFFE8F5E9)
 val EmeraldOnContainer = Color(0xFF064E3B)
+
+// Forest Green & FuelSafe Screenshot Aesthetic Palette
+val ForestDark = Color(0xFF032B1E)
+val ForestPrimary = Color(0xFF084B34)
+val ForestMedium = Color(0xFF0E6948)
+val ForestLight = Color(0xFF14885E)
+val ForestMint = Color(0xFF4ADE80)
+val ForestPill = Color(0xFFE8F5E9)
+val ForestPillText = Color(0xFF065F46)
 
 // Royal Cobalt / Indigo (Products, Catalog, System Navigation)
 val IndigoPrimary = Color(0xFF4F46E5)

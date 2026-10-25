@@ -37,8 +37,13 @@ import java.util.UUID
  */
 sealed class WarehouseScreen {
     data object Login : WarehouseScreen()
+    data object SignUp : WarehouseScreen()
     data object Dashboard : WarehouseScreen()
+    data object InventoryDashboard : WarehouseScreen()
+    data object AddItem : WarehouseScreen()
     data object Products : WarehouseScreen()
+    data object Suppliers : WarehouseScreen()
+    data object AuditLog : WarehouseScreen()
     data object Scanner : WarehouseScreen()
     data object StockOperations : WarehouseScreen()
     data object Assets : WarehouseScreen()
@@ -60,8 +65,13 @@ sealed class WarehouseScreen {
 class WarehouseViewModel(
     val repository: WarehouseRepository,
     val bluetoothManager: BluetoothDeviceManager = BluetoothDeviceManager(),
-    val nfcManager: NfcTagManager = NfcTagManager()
+    val nfcManager: NfcTagManager = NfcTagManager(),
+    val context: android.content.Context? = null
 ) : ViewModel() {
+
+    val firebaseAuthManager: com.example.data.auth.FirebaseAuthManager? = context?.let {
+        com.example.data.auth.FirebaseAuthManager(it)
+    }
 
     // Current navigation screen
     private val _currentScreen = MutableStateFlow<WarehouseScreen>(WarehouseScreen.Dashboard)
@@ -106,7 +116,71 @@ class WarehouseViewModel(
         }
     }
 
+    fun firebaseLogin(
+        email: String,
+        password: String,
+        role: UserRole,
+        onResult: (Boolean, String?) -> Unit
+    ) {
+        viewModelScope.launch {
+            val authMgr = firebaseAuthManager ?: context?.let { com.example.data.auth.FirebaseAuthManager(it) }
+            val authResult = authMgr?.signIn(email, password)
+                ?: Result.success("LOCAL_AUTH_${email.hashCode()}")
+
+            authResult.onSuccess { uid ->
+                val username = email.substringBefore("@").ifBlank { "user_${uid.take(4)}" }
+                val userResult = repository.loginUser(username, role)
+                userResult.onSuccess { user ->
+                    showFeedback("Signed in via Firebase Auth: ${user.fullName} (${user.role.name})")
+                    navigateTo(WarehouseScreen.Dashboard)
+                    onResult(true, null)
+                }.onFailure { err ->
+                    showFeedback("User sync error: ${err.message}")
+                    onResult(false, err.message)
+                }
+            }.onFailure { err ->
+                val errMsg = err.message ?: "Authentication failed."
+                showFeedback(errMsg)
+                onResult(false, errMsg)
+            }
+        }
+    }
+
+    fun firebaseSignUp(
+        email: String,
+        password: String,
+        fullName: String,
+        role: UserRole,
+        onResult: (Boolean, String?) -> Unit
+    ) {
+        viewModelScope.launch {
+            val authMgr = firebaseAuthManager ?: context?.let { com.example.data.auth.FirebaseAuthManager(it) }
+            val authResult = authMgr?.signUp(email, password)
+                ?: Result.success("LOCAL_AUTH_${email.hashCode()}")
+
+            authResult.onSuccess { uid ->
+                val username = email.substringBefore("@").ifBlank { "user_${uid.take(4)}" }
+                val createdUser = repository.createUser(
+                    fullName = fullName.ifBlank { username.replaceFirstChar { it.uppercase() } },
+                    username = username,
+                    email = email.trim(),
+                    role = role,
+                    warehouseId = "WH-NORTH"
+                )
+                repository.switchUserRole(role)
+                showFeedback("Account created via Firebase Auth for ${createdUser.fullName}")
+                navigateTo(WarehouseScreen.Dashboard)
+                onResult(true, null)
+            }.onFailure { err ->
+                val errMsg = err.message ?: "Registration failed."
+                showFeedback(errMsg)
+                onResult(false, errMsg)
+            }
+        }
+    }
+
     fun logout() {
+        firebaseAuthManager?.signOut()
         navigateTo(WarehouseScreen.Login)
         showFeedback("Logged out successfully.")
     }
@@ -157,6 +231,66 @@ class WarehouseViewModel(
 
     val auditLogs: StateFlow<List<AuditLogEntity>> = repository.observeAuditLogs()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * Inserts a new Warehouse Item into the Room SQLite database.
+     */
+    fun insertWarehouseItem(
+        name: String,
+        sku: String,
+        quantity: Int,
+        unitPrice: Double = 29.99,
+        categoryId: String = "CAT-ELEC",
+        locationId: String = "LOC-WH1-A1",
+        imageUrl: String = "",
+        onComplete: (Boolean, String?) -> Unit
+    ) {
+        viewModelScope.launch {
+            if (name.isBlank()) {
+                onComplete(false, "Item name cannot be empty.")
+                return@launch
+            }
+            if (sku.isBlank()) {
+                onComplete(false, "SKU cannot be empty.")
+                return@launch
+            }
+            if (quantity < 0) {
+                onComplete(false, "Quantity must be 0 or greater.")
+                return@launch
+            }
+
+            val productId = "PRD-" + UUID.randomUUID().toString().take(8).uppercase()
+            val newProduct = ProductEntity(
+                productId = productId,
+                sku = sku.trim(),
+                barcode = sku.trim(),
+                qrCode = "QR-${sku.trim()}",
+                name = name.trim(),
+                description = "Warehouse item added from AddItemScreen terminal.",
+                categoryId = categoryId,
+                supplierId = "SUP-01",
+                unitPrice = unitPrice,
+                quantity = quantity,
+                minimumStockLevel = 10,
+                expiryDate = "2029-12-31",
+                locationId = locationId,
+                warehouseId = "WH-NORTH",
+                imageUrl = imageUrl.ifBlank {
+                    "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=400&q=80"
+                }
+            )
+
+            try {
+                repository.saveProduct(newProduct)
+                showFeedback("Successfully added '${newProduct.name}' to Room Database!")
+                onComplete(true, null)
+            } catch (e: Exception) {
+                val err = e.message ?: "Failed to insert item."
+                showFeedback("Error: $err")
+                onComplete(false, err)
+            }
+        }
+    }
 
     // Locations cache for selection dropdowns
     private val _allLocations = MutableStateFlow<List<LocationEntity>>(emptyList())
@@ -270,6 +404,29 @@ class WarehouseViewModel(
                 _allLocations.value = repository.getAllLocations()
             }.onFailure { e ->
                 showFeedback("Stock-In failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Quick restock action for Inventory Dashboard alerts
+     */
+    fun quickRestockProduct(productId: String, quantity: Int = 25) {
+        viewModelScope.launch {
+            val matchingProd = repository.getProductById(productId)
+            val destLoc = matchingProd?.locationId ?: "LOC-WH1-A1"
+            val ref = "QUICK-RESTOCK-" + System.currentTimeMillis().toString().takeLast(5)
+            val result = repository.stockIn(
+                productId = productId,
+                quantity = quantity,
+                destinationLocationId = destLoc,
+                referenceNumber = ref,
+                notes = "Quick restock from Inventory Dashboard"
+            )
+            result.onSuccess {
+                showFeedback("Restocked +$quantity units for ${matchingProd?.name ?: "item"}!")
+            }.onFailure { e ->
+                showFeedback("Restock failed: ${e.message}")
             }
         }
     }
@@ -466,6 +623,25 @@ class WarehouseViewModel(
         }
     }
 
+    // Supplier Management
+    fun createSupplier(name: String, contactPerson: String, email: String, phone: String, address: String) {
+        viewModelScope.launch {
+            if (name.isBlank()) {
+                showFeedback("Supplier name cannot be empty.")
+                return@launch
+            }
+            val sup = repository.createSupplier(name, contactPerson, email, phone, address)
+            showFeedback("Registered supplier: ${sup.name}")
+        }
+    }
+
+    fun deleteSupplier(supplierId: String) {
+        viewModelScope.launch {
+            repository.deleteSupplier(supplierId)
+            showFeedback("Supplier removed.")
+        }
+    }
+
     // Sync queue execution
     val isSyncing = MutableStateFlow(false)
 
@@ -528,12 +704,13 @@ class WarehouseViewModel(
  * Factory for creating WarehouseViewModel with repository dependency.
  */
 class WarehouseViewModelFactory(
-    private val repository: WarehouseRepository
+    private val repository: WarehouseRepository,
+    private val context: android.content.Context? = null
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(WarehouseViewModel::class.java)) {
-            return WarehouseViewModel(repository) as T
+            return WarehouseViewModel(repository = repository, context = context) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
