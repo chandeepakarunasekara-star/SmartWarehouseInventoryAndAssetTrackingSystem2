@@ -28,12 +28,14 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Numbers
 import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -46,7 +48,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.example.ui.components.BarcodeScanner
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -80,6 +86,7 @@ fun AddItemScreen(
 ) {
     val allProducts by viewModel.allProducts.collectAsState()
     val locations by viewModel.allLocations.collectAsState()
+    val pendingBarcode by viewModel.pendingScannedBarcode.collectAsState()
 
     var itemName by remember { mutableStateOf("") }
     var itemSku by remember { mutableStateOf("") }
@@ -89,6 +96,22 @@ fun AddItemScreen(
     var selectedCategoryIndex by remember { mutableIntStateOf(0) }
     var itemImageUrl by remember {
         mutableStateOf("https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=400&q=80")
+    }
+
+    var showScannerDialog by remember { mutableStateOf(false) }
+    var lastScannedBarcode by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(pendingBarcode) {
+        pendingBarcode?.let { code ->
+            if (code.isNotBlank()) {
+                itemSku = code
+                lastScannedBarcode = code
+                if (itemName.isBlank()) {
+                    itemName = "New Product ($code)"
+                }
+                viewModel.clearPendingScannedBarcode()
+            }
+        }
     }
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -347,6 +370,75 @@ fun AddItemScreen(
                 modifier = Modifier.padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // 1. Scan Barcode Fast-Intake Action Banner
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFFE8F5E9))
+                        .border(1.dp, Color(0xFFA7F3D0), RoundedCornerShape(16.dp))
+                        .padding(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF084B34)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.QrCodeScanner,
+                                    contentDescription = "Barcode Scanner",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            Column {
+                                Text(
+                                    text = if (lastScannedBarcode != null) "Barcode: $lastScannedBarcode" else "Scan Product Barcode",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF065F46)
+                                )
+                                Text(
+                                    text = if (lastScannedBarcode != null) "Detected via camera & auto-filled" else "Use Camera / ML Kit to scan item",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF047857)
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = { showScannerDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF084B34)),
+                            shape = RoundedCornerShape(14.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                            modifier = Modifier.testTag("add_item_scan_camera_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.QrCodeScanner,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Scan", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+
                 // Item Name
                 OutlinedTextField(
                     value = itemName,
@@ -370,7 +462,7 @@ fun AddItemScreen(
                         .testTag("add_item_name_input")
                 )
 
-                // SKU (Stock Keeping Unit)
+                // SKU (Stock Keeping Unit) & Barcode
                 OutlinedTextField(
                     value = itemSku,
                     onValueChange = {
@@ -383,12 +475,27 @@ fun AddItemScreen(
                         Icon(Icons.Default.QrCode, contentDescription = null, tint = Color(0xFF084B34))
                     },
                     trailingIcon = {
-                        IconButton(
-                            onClick = {
-                                itemSku = "SKU-" + System.currentTimeMillis().toString().takeLast(6)
-                            }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(end = 4.dp)
                         ) {
-                            Text("Auto", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF084B34))
+                            IconButton(
+                                onClick = { showScannerDialog = true },
+                                modifier = Modifier.testTag("scan_sku_barcode_icon_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.QrCodeScanner,
+                                    contentDescription = "Scan Barcode with Camera",
+                                    tint = Color(0xFF084B34)
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    itemSku = "SKU-" + System.currentTimeMillis().toString().takeLast(6)
+                                }
+                            ) {
+                                Text("Auto", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF084B34))
+                            }
                         }
                     },
                     singleLine = true,
@@ -666,5 +773,140 @@ fun AddItemScreen(
         }
 
         Spacer(modifier = Modifier.height(10.dp))
+    }
+
+    // Interactive Camera & Quick Barcode Scanner Dialog
+    if (showScannerDialog) {
+        Dialog(
+            onDismissRequest = { showScannerDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.75f))
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp)
+                        .testTag("add_item_scanner_dialog")
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFE8F5E9)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.QrCodeScanner,
+                                        contentDescription = null,
+                                        tint = Color(0xFF084B34),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "Scan Item Barcode",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0F172A)
+                                )
+                            }
+                            IconButton(onClick = { showScannerDialog = false }) {
+                                Icon(Icons.Default.Close, contentDescription = "Close Scanner")
+                            }
+                        }
+
+                        Text(
+                            text = "Point camera at UPC/EAN barcode or QR code on package:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF64748B)
+                        )
+
+                        // Real CameraX + Google ML Kit Vision Barcode Scanner
+                        BarcodeScanner(
+                            onBarcodeScanned = { scanned ->
+                                val clean = scanned.trim()
+                                itemSku = clean
+                                lastScannedBarcode = clean
+                                if (itemName.isBlank()) {
+                                    itemName = "Product ($clean)"
+                                }
+                                showScannerDialog = false
+                                errorMessage = null
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(220.dp)
+                        )
+
+                        // Emulator quick barcode shortcuts for instant testing
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = "Quick Test Barcodes (Instant Simulation):",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF475569)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                listOf("78912349901", "SKU-AUTO-88", "BAR-EL-204").forEach { sampleCode ->
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0xFFE8F5E9))
+                                            .border(1.dp, Color(0xFFA7F3D0), RoundedCornerShape(12.dp))
+                                            .clickable {
+                                                itemSku = sampleCode
+                                                lastScannedBarcode = sampleCode
+                                                if (itemName.isBlank()) {
+                                                    itemName = "Scanned Item ($sampleCode)"
+                                                }
+                                                showScannerDialog = false
+                                                errorMessage = null
+                                            }
+                                            .padding(vertical = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = sampleCode,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF065F46)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

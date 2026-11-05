@@ -284,7 +284,11 @@ fun LoginScreen(
                     }
                 } else {
                     MinimalButton(
-                        text = "Sign In with Firebase Auth",
+                        text = when (selectedRole) {
+                            UserRole.ADMIN -> "Sign In as Administrator"
+                            UserRole.WAREHOUSE_MANAGER -> "Sign In as Warehouse Manager"
+                            UserRole.WAREHOUSE_EMPLOYEE -> "Sign In as Warehouse Employee"
+                        },
                         onClick = {
                             if (emailOrUsername.isBlank()) {
                                 errorMessage = "Please enter an email or username."
@@ -322,6 +326,57 @@ fun LoginScreen(
                         modifier = Modifier.fillMaxWidth(),
                         testTag = "login_submit_button"
                     )
+
+                    // Quick One-Tap Demo Sign In
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Or Instant 1-Tap Access:",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Slate500
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = {
+                                    viewModel.login("emp_104", UserRole.WAREHOUSE_EMPLOYEE)
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("quick_login_employee")
+                            ) {
+                                Text("Employee", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EmeraldPrimary)
+                            }
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = {
+                                    viewModel.login("mgr_david", UserRole.WAREHOUSE_MANAGER)
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("quick_login_manager")
+                            ) {
+                                Text("Manager", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AmberPrimary)
+                            }
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = {
+                                    viewModel.login("admin_sarah", UserRole.ADMIN)
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("quick_login_admin")
+                            ) {
+                                Text("Admin", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = IndigoPrimary)
+                            }
+                        }
+                    }
                 }
 
                 // Switch to Sign Up Flow

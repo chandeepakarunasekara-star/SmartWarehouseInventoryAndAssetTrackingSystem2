@@ -53,12 +53,16 @@ The application is built with **Kotlin**, **Jetpack Compose (Material 3)**, and 
 
 ---
 
-### 3. Comprehensive Product Catalog Management
-- **Use Case Mapping**: Section 2 (Product Catalog)
-- **Target Roles**: `ADMINISTRATOR`, `WAREHOUSE_MANAGER`
+### 3. Comprehensive Product Catalog Management & Barcode Registration
+- **Use Case Mapping**: Section 2 (Product Catalog), Section 3 (Mobile Barcode / QR Scanning)
+- **Target Roles**: `ADMINISTRATOR`, `WAREHOUSE_MANAGER`, `WAREHOUSE_EMPLOYEE`
 - **Implementation**:
   - `ProductListScreen.kt`, `AddItemScreen.kt`, `ProductEntity`, `ProductDao`
-  - Complete master data fields: Product ID (`PRD-xxxxx`), SKU, Barcode (EAN-13/Code128), QR Code, Name, Description, Category, Supplier ID, Unit Price, Quantity, Minimum Stock Level, Expiry Date (`YYYY-MM-DD`), Location ID, and Image URL.
+  - Complete master data fields: Product ID (`PRD-xxxxx`), SKU, Barcode (EAN-13/Code128/UPC), QR Code, Name, Description, Category, Supplier ID, Unit Price, Quantity, Minimum Stock Level, Expiry Date (`YYYY-MM-DD`), Location ID, and Image URL.
+  - **Barcode Scan Product Intake**:
+    - Add new products by scanning barcode labels directly with the camera via ML Kit Vision inside `AddItemScreen`.
+    - Integrated barcode scanner button on the SKU input field opening a real-time scanning viewfinder with quick-simulation test chips.
+    - Seamless flow from `ScannerScreen`: Scanning an unregistered barcode automatically displays an **"Add as New Product with this Barcode"** button, navigating directly to `AddItemScreen` with the barcode pre-populated.
   - Real-time search by keyword, SKU, or barcode code.
   - Filtering by category (Electronics, Heavy Equipment, Consumables, Safety Gear).
   - Add and Edit item dialogs with validation against negative stock levels and duplicate barcodes.
@@ -68,14 +72,16 @@ The application is built with **Kotlin**, **Jetpack Compose (Material 3)**, and 
 
 ### 4. Barcode & QR Code Scanning (ML Kit & Peripherals)
 - **Use Case Mapping**: Section 3 (Mobile Barcode / QR Scanning)
-- **Target Roles**: `WAREHOUSE_EMPLOYEE`, `WAREHOUSE_MANAGER`
+- **Target Roles**: `WAREHOUSE_EMPLOYEE`, `WAREHOUSE_MANAGER`, `ADMINISTRATOR`
 - **Implementation**:
   - `ScannerScreen.kt`, `BarcodeScanner.kt`, `com.google.mlkit:barcode-scanning`
   - Camera-based real-time viewfinder overlay with animated scanning laser beam and reticle targeting.
-  - Instant product lookup upon scanning barcode or QR code:
+  - Instant product & asset lookup upon scanning barcode or QR code:
     - Displays product name, SKU, current stock, assigned bin location, and supplier.
     - Quick action buttons: **[Stock In]**, **[Stock Out]**, **[Transfer]**, and **[History]**.
+    - If code is unrecognized, offers an instant one-tap **[Add as New Product]** action pre-filling the barcode into the product registration form.
   - Manual code entry dialog for damaged labels or low-light situations.
+  - Test Barcode shortcuts for emulator simulation (including existing items and unregistered codes).
   - Torch / flashlight toggle button and camera permission handling.
 
 ---

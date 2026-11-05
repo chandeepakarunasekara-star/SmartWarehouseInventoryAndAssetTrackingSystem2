@@ -112,9 +112,9 @@ fun SyncQueueScreen(
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = if (isOnline) {
-                                "Online: Transactions queue and sync to Spring Boot REST API."
+                                "Online: All transactions write to Room database and sync immediately to Firebase Cloud."
                             } else {
-                                "Offline: Operations write locally to Room and wait in SyncQueue."
+                                "Offline Mode: All additions & edits write to Room SQLite locally, queued until back online."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = Slate600
@@ -303,10 +303,12 @@ private fun SyncQueueRow(item: SyncQueueEntity) {
             }
 
             if (item.errorMessage.isNotBlank()) {
+                val isSynced = item.status == SyncStatus.SYNCED
                 Text(
-                    text = "Retry error: ${item.errorMessage}",
+                    text = if (isSynced) "Cloud Target: ${item.errorMessage}" else "Status Note: ${item.errorMessage}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MutedCoral
+                    color = if (isSynced) SageTeal else MutedCoral,
+                    fontWeight = if (isSynced) FontWeight.SemiBold else FontWeight.Normal
                 )
             }
         }

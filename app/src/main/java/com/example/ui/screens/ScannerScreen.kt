@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashOn
@@ -43,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.example.ui.viewmodel.WarehouseScreen
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -140,6 +142,7 @@ fun ScannerScreen(
                 QuickScanChip("78912345602", "Scanner Term.") { viewModel.handleScannedCode("78912345602") }
                 QuickScanChip("AST-FL-01", "Forklift (AST)") { viewModel.handleScannedCode("AST-FL-01") }
                 QuickScanChip("AST-PJ-04", "Pallet Jack") { viewModel.handleScannedCode("AST-PJ-04") }
+                QuickScanChip("89012349901", "+ New Unregistered") { viewModel.handleScannedCode("89012349901") }
             }
         }
 
@@ -319,32 +322,46 @@ fun ScannerScreen(
             }
         }
 
-        // 6. Error message if code not recognized
+        // 6. Unregistered barcode card with quick 'Add as New Product' action
         scanErrorMessage?.let { err ->
-            MinimalCard {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = MutedCoral,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Column {
-                        Text(
-                            text = "Unregistered Barcode",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MutedCoral
+            MinimalCard(modifier = Modifier.testTag("unregistered_barcode_card")) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MutedCoral,
+                            modifier = Modifier.size(24.dp)
                         )
-                        Text(
-                            text = err,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Slate600
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Unregistered Barcode / SKU",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MutedCoral
+                            )
+                            Text(
+                                text = err,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Slate600
+                            )
+                        }
                     }
+
+                    // Direct action to register this barcode into the Room database
+                    MinimalButton(
+                        text = "Add as New Product ($scannedCode)",
+                        onClick = {
+                            viewModel.setPendingScannedBarcode(scannedCode)
+                            viewModel.navigateTo(WarehouseScreen.AddItem)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("add_scanned_barcode_as_product_button")
+                    )
                 }
             }
         }

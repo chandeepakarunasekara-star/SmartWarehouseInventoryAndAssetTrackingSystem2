@@ -186,7 +186,14 @@ class WarehouseViewModel(
     }
 
     fun toggleNetworkConnection() {
-        repository.setNetworkConnected(!isNetworkConnected.value)
+        val newConnected = !isNetworkConnected.value
+        repository.setNetworkConnected(newConnected)
+        if (newConnected) {
+            showFeedback("Back online: Syncing Room database changes to Firebase Cloud...")
+            triggerSyncNow()
+        } else {
+            showFeedback("Offline mode active: All changes will save locally to Room SQLite.")
+        }
     }
 
     // Master Catalog Data
@@ -338,6 +345,17 @@ class WarehouseViewModel(
     val scannedProductResult = MutableStateFlow<ProductEntity?>(null)
     val scannedAssetResult = MutableStateFlow<AssetEntity?>(null)
     val scanErrorMessage = MutableStateFlow<String?>(null)
+
+    // Barcode passed from Scanner to AddItemScreen for quick registration
+    val pendingScannedBarcode = MutableStateFlow<String?>(null)
+
+    fun setPendingScannedBarcode(barcode: String) {
+        pendingScannedBarcode.value = barcode.trim()
+    }
+
+    fun clearPendingScannedBarcode() {
+        pendingScannedBarcode.value = null
+    }
 
     fun handleScannedCode(code: String) {
         val clean = code.trim()

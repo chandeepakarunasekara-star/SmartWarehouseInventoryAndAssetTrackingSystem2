@@ -430,4 +430,92 @@ class ExampleRobolectricTest {
             .build()
         assertNotNull(options)
     }
+
+    @Test
+    fun `test insert product with scanned barcode and query by barcode`() = runBlocking {
+        val scannedBarcode = "78912349901"
+        val newProduct = ProductEntity(
+            productId = "PRD-SCAN-001",
+            sku = scannedBarcode,
+            barcode = scannedBarcode,
+            qrCode = "QR-$scannedBarcode",
+            name = "Scanned Pallet Jack Sensor",
+            description = "Inserted via barcode intake workflow",
+            categoryId = "CAT-ELEC",
+            supplierId = "SUP-01",
+            unitPrice = 89.99,
+            quantity = 40,
+            minimumStockLevel = 10,
+            expiryDate = "2029-12-31",
+            locationId = "LOC-WH1-A1",
+            warehouseId = "WH-NORTH",
+            imageUrl = ""
+        )
+
+        productDao.insertProduct(newProduct)
+
+        val retrieved = productDao.findProductByCode(scannedBarcode)
+        assertNotNull(retrieved)
+        assertEquals("Scanned Pallet Jack Sensor", retrieved?.name)
+        assertEquals(scannedBarcode, retrieved?.sku)
+        assertEquals(scannedBarcode, retrieved?.barcode)
+        assertEquals(40, retrieved?.quantity)
+    }
+
+    @Test
+    fun `test offline room persistence and online sync queue processing`() = runBlocking {
+        val repo = WarehouseRepository(db)
+
+        // 1. Simulate Offline Mode
+        repo.setNetworkConnected(false)
+        assertFalse(repo.isNetworkConnected.value)
+
+        // 2. Add product while offline
+        val offlineProduct = ProductEntity(
+            productId = "PRD-OFFLINE-99",
+            sku = "SKU-OFFLINE-99",
+            barcode = "BAR-OFFLINE-99",
+            qrCode = "QR-OFFLINE-99",
+            name = "Offline Rugged Handheld Scanner",
+            description = "Created in offline mode",
+            categoryId = "CAT-ELEC",
+            supplierId = "SUP-01",
+            unitPrice = 120.0,
+            quantity = 50,
+            minimumStockLevel = 10,
+            expiryDate = "2030-01-01",
+            locationId = "LOC-WH1-A1",
+            warehouseId = "WH-NORTH",
+            imageUrl = ""
+        )
+        repo.saveProduct(offlineProduct)
+
+        // Verify product was immediately saved in Room SQLite
+        val savedInRoom = productDao.getProductById("PRD-OFFLINE-99")
+        assertNotNull(savedInRoom)
+        assertEquals("Offline Rugged Handheld Scanner", savedInRoom?.name)
+
+        // Verify sync queue has a PENDING item
+        val pendingItems = syncQueueDao.getPendingOrFailedItems()
+        assertTrue(pendingItems.isNotEmpty())
+        val productSyncItem = pendingItems.find { it.entityId == "PRD-OFFLINE-99" }
+        assertNotNull(productSyncItem)
+        assertEquals(SyncStatus.PENDING, productSyncItem?.status)
+
+        // 3. Attempting sync while offline should do nothing (return 0)
+        val offlineSyncCount = repo.processSyncQueue()
+        assertEquals(0, offlineSyncCount)
+
+        // 4. Switch back to Online Mode
+        repo.setNetworkConnected(true)
+        assertTrue(repo.isNetworkConnected.value)
+
+        // 5. Trigger sync when online
+        val onlineSyncedCount = repo.processSyncQueue()
+        assertTrue(onlineSyncedCount > 0)
+
+        // Verify queue items are now SYNCED
+        val remainingPending = syncQueueDao.getPendingOrFailedItems()
+        assertTrue(remainingPending.isEmpty())
+    }
 }
