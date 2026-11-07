@@ -321,8 +321,8 @@ class ExampleRobolectricTest {
         val user = UserEntity(
             userId = "USR-TEST-01",
             username = "admin_sarah",
-            fullName = "Sarah Jenkins",
-            email = "s.jenkins@smartwarehouse.net",
+            fullName = "Chandeepa karunasekara",
+            email = "chandeepa@smartwarehouse.net",
             role = UserRole.ADMIN,
             warehouseAssignedId = "WH-NORTH",
             isActive = true
@@ -337,7 +337,7 @@ class ExampleRobolectricTest {
         val log = AuditLogEntity(
             eventId = "AUDIT-001",
             userId = "USR-TEST-01",
-            userName = "Sarah Jenkins",
+            userName = "Chandeepa karunasekara",
             eventType = "PRODUCT_CREATED",
             entityType = "PRODUCT",
             entityId = "PRD-TEST-001",

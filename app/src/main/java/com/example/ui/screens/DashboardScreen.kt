@@ -104,7 +104,6 @@ fun DashboardScreen(
     var showStockOutDialog by remember { mutableStateOf(false) }
     var showTransferDialog by remember { mutableStateOf(false) }
     var showNotificationsDialog by remember { mutableStateOf(false) }
-    var showRoleDialog by remember { mutableStateOf(false) }
 
     val unreadNotifications = notifications.count { !it.isRead }
     val displayedProducts = products.take(6)
@@ -205,7 +204,6 @@ fun DashboardScreen(
                             .clip(CircleShape)
                             .background(Color(0xFFE8F5E9))
                             .border(1.5.dp, Color(0xFF10B981), CircleShape)
-                            .clickable { showRoleDialog = true }
                             .testTag("dashboard_profile_button"),
                         contentAlignment = Alignment.Center
                     ) {
@@ -574,7 +572,7 @@ fun DashboardScreen(
                         }
                     }
 
-                    // Top Row: Products & Assets
+                    // Color-Themed Operations Metrics Grid
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -582,14 +580,54 @@ fun DashboardScreen(
                         DashboardMetricBox(
                             title = "Products",
                             value = "${products.size}",
-                            subtitle = "Catalog Items",
+                            subtitle = "SKUs Registered",
+                            containerColor = Color(0xFFEEF2FF),
+                            borderColor = Color(0xFFC7D2FE),
+                            accentColor = Color(0xFF4F46E5),
+                            textColor = Color(0xFF1E1B4B),
+                            icon = Icons.Default.Inventory2,
                             onClick = { viewModel.navigateTo(WarehouseScreen.Products) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        DashboardMetricBox(
+                            title = "Low Stock",
+                            value = "${lowStockProducts.size}",
+                            subtitle = if (lowStockProducts.isNotEmpty()) "Action Required" else "Stock Healthy",
+                            containerColor = Color(0xFFFEF3C7),
+                            borderColor = Color(0xFFFDE68A),
+                            accentColor = Color(0xFFD97706),
+                            textColor = Color(0xFF78350F),
+                            icon = Icons.Default.WarningAmber,
+                            onClick = { viewModel.navigateTo(WarehouseScreen.InventoryDashboard) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        DashboardMetricBox(
+                            title = "Transfers",
+                            value = "${pendingTransfers.size}",
+                            subtitle = "Awaiting Approval",
+                            containerColor = Color(0xFFCFFAFE),
+                            borderColor = Color(0xFFA5F3FC),
+                            accentColor = Color(0xFF0891B2),
+                            textColor = Color(0xFF164E63),
+                            icon = Icons.Default.CompareArrows,
+                            onClick = { viewModel.navigateTo(WarehouseScreen.Approvals) },
                             modifier = Modifier.weight(1f)
                         )
                         DashboardMetricBox(
                             title = "Assets",
                             value = "${assets.size}",
                             subtitle = "Physical Units",
+                            containerColor = Color(0xFFEDE9FE),
+                            borderColor = Color(0xFFDDD6FE),
+                            accentColor = Color(0xFF7C3AED),
+                            textColor = Color(0xFF2E1065),
+                            icon = Icons.Default.Assessment,
                             onClick = { viewModel.navigateTo(WarehouseScreen.Assets) },
                             modifier = Modifier.weight(1f)
                         )
@@ -1104,144 +1142,6 @@ fun DashboardScreen(
             }
         }
     }
-
-    if (showRoleDialog) {
-        RoleSwitcherDialog(
-            currentUser = currentUser,
-            onRoleSelected = { role ->
-                viewModel.switchUserRole(role)
-                showRoleDialog = false
-            },
-            onDismiss = { showRoleDialog = false }
-        )
-    }
-}
-
-@Composable
-private fun RoleSwitcherDialog(
-    currentUser: com.example.data.local.entity.UserEntity?,
-    onRoleSelected: (UserRole) -> Unit,
-    onDismiss: () -> Unit
-) {
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-                .testTag("role_switcher_dialog")
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "Switch User Role",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A)
-                        )
-                        Text(
-                            text = "PDF Use Case 1: Role-Based Authorization",
-                            fontSize = 11.sp,
-                            color = Color(0xFF64748B)
-                        )
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFF64748B))
-                    }
-                }
-
-                currentUser?.let { user ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFFE8F5E9))
-                            .padding(12.dp)
-                    ) {
-                        Column {
-                            Text("Active: ${user.fullName}", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF084B34))
-                            Text("Role: ${user.role.name} • Warehouse: ${user.warehouseAssignedId}", fontSize = 11.sp, color = Color(0xFF065F46))
-                        }
-                    }
-                }
-
-                RoleSelectCard(
-                    title = "Administrator",
-                    subtitle = "Sarah Jenkins • Full system, users, warehouses, audit logs",
-                    isSelected = currentUser?.role == UserRole.ADMIN,
-                    onClick = {
-                        onRoleSelected(UserRole.ADMIN)
-                        onDismiss()
-                    }
-                )
-
-                RoleSelectCard(
-                    title = "Warehouse Manager",
-                    subtitle = "David Vance • Transfers, inventory approvals, reports",
-                    isSelected = currentUser?.role == UserRole.WAREHOUSE_MANAGER,
-                    onClick = {
-                        onRoleSelected(UserRole.WAREHOUSE_MANAGER)
-                        onDismiss()
-                    }
-                )
-
-                RoleSelectCard(
-                    title = "Warehouse Employee",
-                    subtitle = "Marcus (Emp 104) • Scanning, receiving, stock in/out, bin finder",
-                    isSelected = currentUser?.role == UserRole.WAREHOUSE_EMPLOYEE,
-                    onClick = {
-                        onRoleSelected(UserRole.WAREHOUSE_EMPLOYEE)
-                        onDismiss()
-                    }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RoleSelectCard(
-    title: String,
-    subtitle: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (isSelected) Color(0xFFE8F5E9) else Color(0xFFF8FAFC))
-            .border(
-                1.5.dp,
-                if (isSelected) Color(0xFF084B34) else Color(0xFFE2E8F0),
-                RoundedCornerShape(16.dp)
-            )
-            .clickable { onClick() }
-            .padding(14.dp)
-    ) {
-        Column {
-            Text(
-                text = title,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = if (isSelected) Color(0xFF084B34) else Color(0xFF0F172A)
-            )
-            Text(
-                text = subtitle,
-                fontSize = 11.sp,
-                color = Color(0xFF64748B)
-            )
-        }
-    }
 }
 
 @Composable
@@ -1249,20 +1149,41 @@ private fun DashboardMetricBox(
     title: String,
     value: String,
     subtitle: String,
+    containerColor: Color,
+    borderColor: Color,
+    accentColor: Color,
+    textColor: Color,
+    icon: ImageVector,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFFF1F5F9))
+            .clip(RoundedCornerShape(18.dp))
+            .background(containerColor)
+            .border(1.dp, borderColor, RoundedCornerShape(18.dp))
             .clickable { onClick() }
-            .padding(12.dp)
+            .padding(14.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF64748B))
-            Text(value, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF084B34))
-            Text(subtitle, fontSize = 10.sp, color = Color(0xFF94A3B8))
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = textColor.copy(alpha = 0.8f))
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(accentColor.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(imageVector = icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(16.dp))
+                }
+            }
+            Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = textColor)
+            Text(subtitle, fontSize = 10.sp, fontWeight = FontWeight.Medium, color = textColor.copy(alpha = 0.7f))
         }
     }
 }

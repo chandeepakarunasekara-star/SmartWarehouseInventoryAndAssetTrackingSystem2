@@ -135,53 +135,7 @@ fun SettingsScreen(
             }
         }
 
-        // 2. Role Switcher for Evaluation
-        item {
-            MinimalCard {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "Demo Role Switcher",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Slate900
-                    )
-                    Text(
-                        text = "Switch roles instantly to test role-based permissions throughout the app:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Slate600
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        RoleChoiceChip(
-                            label = "Admin",
-                            role = UserRole.ADMIN,
-                            isSelected = currentUser.role == UserRole.ADMIN,
-                            onClick = { viewModel.switchUserRole(UserRole.ADMIN) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        RoleChoiceChip(
-                            label = "Manager",
-                            role = UserRole.WAREHOUSE_MANAGER,
-                            isSelected = currentUser.role == UserRole.WAREHOUSE_MANAGER,
-                            onClick = { viewModel.switchUserRole(UserRole.WAREHOUSE_MANAGER) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        RoleChoiceChip(
-                            label = "Operator",
-                            role = UserRole.WAREHOUSE_EMPLOYEE,
-                            isSelected = currentUser.role == UserRole.WAREHOUSE_EMPLOYEE,
-                            onClick = { viewModel.switchUserRole(UserRole.WAREHOUSE_EMPLOYEE) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-        }
-
-        // 3. Role Permissions Matrix Card
+        // 2. Role Permissions Matrix Card
         item {
             MinimalCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -327,36 +281,6 @@ fun SettingsScreen(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun RoleChoiceChip(
-    label: String,
-    role: UserRole,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (isSelected) SageTealContainer else Slate100)
-            .border(
-                1.dp,
-                if (isSelected) SageTeal else MaterialTheme.colorScheme.outline,
-                RoundedCornerShape(12.dp)
-            )
-            .clickable { onClick() }
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = if (isSelected) SageTealOnContainer else Slate700
-        )
     }
 }
 

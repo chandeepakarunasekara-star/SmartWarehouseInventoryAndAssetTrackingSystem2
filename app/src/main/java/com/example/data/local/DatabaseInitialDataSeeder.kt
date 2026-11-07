@@ -21,20 +21,14 @@ import com.example.domain.model.UserRole
  * including photos, user accounts, hierarchical bins, assets, and transactions.
  */
 object DatabaseInitialDataSeeder {
-    suspend fun seedInitialData(database: AppDatabase) {
+    suspend fun updateDefaultUsers(database: AppDatabase) {
         val userDao = database.userDao()
-        val warehouseDao = database.warehouseDao()
-        val productDao = database.productDao()
-        val assetDao = database.assetDao()
-        val transactionDao = database.stockTransactionDao()
-
-        // 1. Users with distinct role hierarchies
-        val users = listOf(
+        val defaultUsers = listOf(
             UserEntity(
                 userId = "USR-001",
                 username = "admin_sarah",
-                fullName = "Sarah Jenkins",
-                email = "s.jenkins@smartwarehouse.net",
+                fullName = "Chandeepa karunasekara",
+                email = "chandeepa@smartwarehouse.net",
                 role = UserRole.ADMIN,
                 warehouseAssignedId = "WH-NORTH",
                 isActive = true
@@ -42,8 +36,8 @@ object DatabaseInitialDataSeeder {
             UserEntity(
                 userId = "USR-002",
                 username = "mgr_david",
-                fullName = "David Vance",
-                email = "d.vance@smartwarehouse.net",
+                fullName = "Nimal Rathnayake",
+                email = "nimal@smartwarehouse.net",
                 role = UserRole.WAREHOUSE_MANAGER,
                 warehouseAssignedId = "WH-NORTH",
                 isActive = true
@@ -51,8 +45,8 @@ object DatabaseInitialDataSeeder {
             UserEntity(
                 userId = "USR-003",
                 username = "emp_104",
-                fullName = "Employee 104 (Marcus)",
-                email = "m.cole@smartwarehouse.net",
+                fullName = "Sarath pathirana",
+                email = "sarath@smartwarehouse.net",
                 role = UserRole.WAREHOUSE_EMPLOYEE,
                 warehouseAssignedId = "WH-NORTH",
                 isActive = true
@@ -67,7 +61,18 @@ object DatabaseInitialDataSeeder {
                 isActive = true
             )
         )
-        userDao.insertUsers(users)
+        userDao.insertUsers(defaultUsers)
+    }
+
+    suspend fun seedInitialData(database: AppDatabase) {
+        val userDao = database.userDao()
+        val warehouseDao = database.warehouseDao()
+        val productDao = database.productDao()
+        val assetDao = database.assetDao()
+        val transactionDao = database.stockTransactionDao()
+
+        // 1. Users with distinct role hierarchies
+        updateDefaultUsers(database)
 
         // 2. Warehouses
         val warehouses = listOf(
@@ -77,7 +82,7 @@ object DatabaseInitialDataSeeder {
                 code = "WH-A",
                 address = "104 Logistics Blvd, Industrial Sector 4",
                 totalCapacityUnits = 25000,
-                managerName = "David Vance"
+                managerName = "Nimal Rathnayake"
             ),
             WarehouseEntity(
                 warehouseId = "WH-CENTRAL",
@@ -229,7 +234,7 @@ object DatabaseInitialDataSeeder {
                 status = AssetStatus.AVAILABLE,
                 warehouseId = "WH-NORTH",
                 locationId = "LOC-WHA-A-R01-S01",
-                assignedEmployeeName = "Employee 104 (Marcus)",
+                assignedEmployeeName = "Sarath pathirana",
                 condition = "Excellent",
                 purchaseDate = "2023-03-15",
                 lastInspectionDate = "2026-09-10",
@@ -245,7 +250,7 @@ object DatabaseInitialDataSeeder {
                 status = AssetStatus.IN_USE,
                 warehouseId = "WH-NORTH",
                 locationId = "LOC-WHA-B-R03-S02",
-                assignedEmployeeName = "Employee 104 (Marcus)",
+                assignedEmployeeName = "Sarath pathirana",
                 condition = "Good",
                 purchaseDate = "2024-01-20",
                 lastInspectionDate = "2026-08-25",
@@ -261,7 +266,7 @@ object DatabaseInitialDataSeeder {
                 status = AssetStatus.ASSIGNED,
                 warehouseId = "WH-NORTH",
                 locationId = "LOC-WHA-A-R02-S03",
-                assignedEmployeeName = "Employee 104 (Marcus)",
+                assignedEmployeeName = "Sarath pathirana",
                 condition = "Calibrated",
                 purchaseDate = "2025-05-11",
                 lastInspectionDate = "2026-10-01",
@@ -295,10 +300,10 @@ object DatabaseInitialDataSeeder {
                 assetName = "Electric Forklift Toyota 8FBE",
                 fromLocationId = "LOC-WHA-A-R01-S01",
                 toLocationId = "LOC-WHA-B-R03-S02",
-                previousEmployee = "Sarah Jenkins",
-                newEmployee = "Employee 104 (Marcus)",
+                previousEmployee = "Chandeepa karunasekara",
+                newEmployee = "Sarath pathirana",
                 movementType = "Shift Assignment",
-                performedBy = "David Vance (Manager)",
+                performedBy = "Nimal Rathnayake (Manager)",
                 notes = "08:30 Shift Start: Transferred to Section B for pallet unloading."
             ),
             AssetMovementEntity(
@@ -307,10 +312,10 @@ object DatabaseInitialDataSeeder {
                 assetName = "Electric Forklift Toyota 8FBE",
                 fromLocationId = "LOC-WHA-B-R03-S02",
                 toLocationId = "LOC-WHA-C-R01-S05",
-                previousEmployee = "Employee 104 (Marcus)",
-                newEmployee = "Employee 104 (Marcus)",
+                previousEmployee = "Sarath pathirana",
+                newEmployee = "Sarath pathirana",
                 movementType = "Zone Relocation",
-                performedBy = "Employee 104 (Marcus)",
+                performedBy = "Sarath pathirana",
                 notes = "11:15 Relocated to Warehouse A / Section C for dispatch staging."
             )
         )
@@ -327,7 +332,7 @@ object DatabaseInitialDataSeeder {
                 sourceLocationId = "ABC Suppliers Delivery",
                 destinationLocationId = "LOC-WHA-B-R03-S02",
                 performedByUserId = "USR-003",
-                performedByUserName = "Employee 104",
+                performedByUserName = "Sarath pathirana",
                 referenceNumber = "PO-ABC-2026",
                 notes = "Shipment received and verified.",
                 transferStatus = "COMPLETED",
@@ -342,7 +347,7 @@ object DatabaseInitialDataSeeder {
                 sourceLocationId = "LOC-WHA-B-R03-S02",
                 destinationLocationId = "Dispatch Bay 3",
                 performedByUserId = "USR-003",
-                performedByUserName = "Employee 104",
+                performedByUserName = "Sarath pathirana",
                 referenceNumber = "DISP-8821",
                 notes = "Dispatched to Retail Store #4.",
                 transferStatus = "COMPLETED",
@@ -357,12 +362,12 @@ object DatabaseInitialDataSeeder {
                 sourceLocationId = "LOC-WHA-B-R04-S02",
                 destinationLocationId = "LOC-WHA-C-R01-S05",
                 performedByUserId = "USR-002",
-                performedByUserName = "David Vance (Manager)",
+                performedByUserName = "Nimal Rathnayake (Manager)",
                 referenceNumber = "XFR-2026-04",
                 notes = "Transfer from Section B to Section C.",
                 transferStatus = "PENDING", // PENDING TRANSFER APPROVAL
-                requestedBy = "Employee 104",
-                approvedBy = "David Vance",
+                requestedBy = "Sarath pathirana",
+                approvedBy = "Nimal Rathnayake",
                 syncStatus = SyncStatus.SYNCED
             )
         )
@@ -406,7 +411,7 @@ object DatabaseInitialDataSeeder {
             AuditLogEntity(
                 eventId = "EVT-001",
                 userId = "USR-001",
-                userName = "Admin01 (Sarah)",
+                userName = "Admin01 (Chandeepa)",
                 eventType = "PRODUCT_CREATED",
                 entityType = "PRODUCT",
                 entityId = "PRD-00125",

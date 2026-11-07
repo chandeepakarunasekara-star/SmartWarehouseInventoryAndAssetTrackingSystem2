@@ -73,11 +73,11 @@ class WarehouseViewModel(
         com.example.data.auth.FirebaseAuthManager(it)
     }
 
-    // Current navigation screen
-    private val _currentScreen = MutableStateFlow<WarehouseScreen>(WarehouseScreen.Dashboard)
+    // Current navigation screen (Login screen displayed first on app launch)
+    private val _currentScreen = MutableStateFlow<WarehouseScreen>(WarehouseScreen.Login)
     val currentScreen = _currentScreen.asStateFlow()
 
-    private val screenBackStack = mutableListOf<WarehouseScreen>(WarehouseScreen.Dashboard)
+    private val screenBackStack = mutableListOf<WarehouseScreen>(WarehouseScreen.Login)
 
     fun navigateTo(screen: WarehouseScreen) {
         if (_currentScreen.value != screen) {
@@ -181,7 +181,9 @@ class WarehouseViewModel(
 
     fun logout() {
         firebaseAuthManager?.signOut()
-        navigateTo(WarehouseScreen.Login)
+        screenBackStack.clear()
+        screenBackStack.add(WarehouseScreen.Login)
+        _currentScreen.value = WarehouseScreen.Login
         showFeedback("Logged out successfully.")
     }
 

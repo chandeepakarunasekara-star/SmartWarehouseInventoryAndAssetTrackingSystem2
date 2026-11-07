@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Notifications
@@ -142,7 +143,6 @@ fun MainWarehouseLayout(
     val snackbarHostState = remember { SnackbarHostState() }
     var showMoreMenuSheet by remember { mutableStateOf(false) }
     var showNotificationsDialog by remember { mutableStateOf(false) }
-    var showRoleDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(statusMessage) {
         statusMessage?.let { msg ->
@@ -210,7 +210,7 @@ fun MainWarehouseLayout(
                     }
                 },
                 actions = {
-                    // Active Role Badge Button (PDF Section 1: Role-Based Authorization)
+                    // Active Role Badge (PDF Section 1: Role-Based Authorization)
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
@@ -230,7 +230,6 @@ fun MainWarehouseLayout(
                                 },
                                 RoundedCornerShape(12.dp)
                             )
-                            .clickable { showRoleDialog = true }
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                             .testTag("top_bar_role_badge"),
                         contentAlignment = Alignment.Center
@@ -495,8 +494,7 @@ fun MainWarehouseLayout(
                     if (currentUser.role == UserRole.WAREHOUSE_EMPLOYEE) {
                         AccessRestrictedScreen(
                             requiredRoleName = "Warehouse Manager or Administrator",
-                            currentUser = currentUser,
-                            onSwitchRole = { viewModel.switchUserRole(UserRole.WAREHOUSE_MANAGER) }
+                            currentUser = currentUser
                         )
                     } else {
                         InventoryDashboardScreen(viewModel = viewModel)
@@ -508,8 +506,7 @@ fun MainWarehouseLayout(
                     if (currentUser.role != UserRole.ADMIN) {
                         AccessRestrictedScreen(
                             requiredRoleName = "Administrator",
-                            currentUser = currentUser,
-                            onSwitchRole = { viewModel.switchUserRole(UserRole.ADMIN) }
+                            currentUser = currentUser
                         )
                     } else {
                         AuditLogScreen(viewModel = viewModel)
@@ -526,8 +523,7 @@ fun MainWarehouseLayout(
                     if (currentUser.role == UserRole.WAREHOUSE_EMPLOYEE) {
                         AccessRestrictedScreen(
                             requiredRoleName = "Warehouse Manager or Administrator",
-                            currentUser = currentUser,
-                            onSwitchRole = { viewModel.switchUserRole(UserRole.WAREHOUSE_MANAGER) }
+                            currentUser = currentUser
                         )
                     } else {
                         ReportsScreen(viewModel = viewModel)
@@ -537,8 +533,7 @@ fun MainWarehouseLayout(
                     if (currentUser.role != UserRole.ADMIN) {
                         AccessRestrictedScreen(
                             requiredRoleName = "Administrator",
-                            currentUser = currentUser,
-                            onSwitchRole = { viewModel.switchUserRole(UserRole.ADMIN) }
+                            currentUser = currentUser
                         )
                     } else {
                         UserManagementScreen(viewModel = viewModel)
@@ -548,8 +543,7 @@ fun MainWarehouseLayout(
                     if (currentUser.role == UserRole.WAREHOUSE_EMPLOYEE) {
                         AccessRestrictedScreen(
                             requiredRoleName = "Warehouse Manager or Administrator",
-                            currentUser = currentUser,
-                            onSwitchRole = { viewModel.switchUserRole(UserRole.WAREHOUSE_MANAGER) }
+                            currentUser = currentUser
                         )
                     } else {
                         ApprovalsScreen(viewModel = viewModel)
@@ -717,25 +711,12 @@ fun MainWarehouseLayout(
             }
         )
     }
-
-    // Role Switcher Modal Dialog
-    if (showRoleDialog) {
-        RoleSwitcherModalDialog(
-            currentUser = currentUser,
-            onRoleSelected = { role ->
-                viewModel.switchUserRole(role)
-                showRoleDialog = false
-            },
-            onDismiss = { showRoleDialog = false }
-        )
-    }
 }
 
 @Composable
 private fun AccessRestrictedScreen(
     requiredRoleName: String,
-    currentUser: com.example.data.local.entity.UserEntity,
-    onSwitchRole: () -> Unit
+    currentUser: com.example.data.local.entity.UserEntity
 ) {
     Box(
         modifier = Modifier
@@ -762,7 +743,7 @@ private fun AccessRestrictedScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Close,
+                        imageVector = Icons.Default.Lock,
                         contentDescription = "Restricted",
                         tint = Color(0xFFE11D48),
                         modifier = Modifier.size(28.dp)
@@ -777,135 +758,12 @@ private fun AccessRestrictedScreen(
                 )
 
                 Text(
-                    text = "This screen requires $requiredRoleName authorization.\nYour current active role is ${currentUser.role.name}.",
+                    text = "This screen requires $requiredRoleName authorization.\nYour current account (${currentUser.fullName}) is logged in as ${currentUser.role.name}.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Slate600,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
-
-                MinimalButton(
-                    text = "Switch Role to Authorized Level",
-                    onClick = onSwitchRole,
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
-        }
-    }
-}
-
-@Composable
-private fun RoleSwitcherModalDialog(
-    currentUser: com.example.data.local.entity.UserEntity,
-    onRoleSelected: (UserRole) -> Unit,
-    onDismiss: () -> Unit
-) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "Switch User Role",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Slate900
-                        )
-                        Text(
-                            text = "PDF Use Case 1: Role-Based Authorization",
-                            fontSize = 11.sp,
-                            color = Slate500
-                        )
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Slate500)
-                    }
-                }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFFE8F5E9))
-                        .padding(10.dp)
-                ) {
-                    Text(
-                        text = "Current: ${currentUser.fullName} (${currentUser.role.name})",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF084B34)
-                    )
-                }
-
-                RoleDialogCard(
-                    title = "Administrator",
-                    desc = "Sarah Jenkins • Full access to users, warehouses, audit logs & settings",
-                    isSelected = currentUser.role == UserRole.ADMIN,
-                    onClick = { onRoleSelected(UserRole.ADMIN) }
-                )
-
-                RoleDialogCard(
-                    title = "Warehouse Manager",
-                    desc = "David Vance • Stock transfers, inventory approvals, reports & assets",
-                    isSelected = currentUser.role == UserRole.WAREHOUSE_MANAGER,
-                    onClick = { onRoleSelected(UserRole.WAREHOUSE_MANAGER) }
-                )
-
-                RoleDialogCard(
-                    title = "Warehouse Employee",
-                    desc = "Marcus (Emp 104) • Scanning, receiving, stock in/out & bin locator",
-                    isSelected = currentUser.role == UserRole.WAREHOUSE_EMPLOYEE,
-                    onClick = { onRoleSelected(UserRole.WAREHOUSE_EMPLOYEE) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RoleDialogCard(
-    title: String,
-    desc: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (isSelected) Color(0xFFE8F5E9) else Color(0xFFF8FAFC))
-            .border(
-                1.5.dp,
-                if (isSelected) Color(0xFF084B34) else Color(0xFFE2E8F0),
-                RoundedCornerShape(14.dp)
-            )
-            .clickable { onClick() }
-            .padding(12.dp)
-    ) {
-        Column {
-            Text(
-                text = title,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = if (isSelected) Color(0xFF084B34) else Color(0xFF0F172A)
-            )
-            Text(
-                text = desc,
-                fontSize = 11.sp,
-                color = Color(0xFF64748B)
-            )
         }
     }
 }

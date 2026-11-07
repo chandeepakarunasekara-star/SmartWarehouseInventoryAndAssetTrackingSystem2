@@ -47,6 +47,8 @@ class WarehouseRepository(private val database: AppDatabase) {
         CoroutineScope(Dispatchers.IO).launch {
             if (productDao.getAllProducts().isEmpty()) {
                 com.example.data.local.DatabaseInitialDataSeeder.seedInitialData(database)
+            } else {
+                com.example.data.local.DatabaseInitialDataSeeder.updateDefaultUsers(database)
             }
         }
     }
@@ -64,8 +66,8 @@ class WarehouseRepository(private val database: AppDatabase) {
         UserEntity(
             userId = "USR-003",
             username = "emp_104",
-            fullName = "Employee 104 (Marcus)",
-            email = "m.cole@smartwarehouse.net",
+            fullName = "Sarath pathirana",
+            email = "sarath@smartwarehouse.net",
             role = UserRole.WAREHOUSE_EMPLOYEE,
             warehouseAssignedId = "WH-NORTH",
             isActive = true
@@ -87,8 +89,8 @@ class WarehouseRepository(private val database: AppDatabase) {
             UserRole.ADMIN -> UserEntity(
                 userId = "USR-001",
                 username = "admin_sarah",
-                fullName = "Sarah Jenkins",
-                email = "s.jenkins@smartwarehouse.net",
+                fullName = "Chandeepa karunasekara",
+                email = "chandeepa@smartwarehouse.net",
                 role = UserRole.ADMIN,
                 warehouseAssignedId = "WH-NORTH",
                 isActive = true
@@ -96,8 +98,8 @@ class WarehouseRepository(private val database: AppDatabase) {
             UserRole.WAREHOUSE_MANAGER -> UserEntity(
                 userId = "USR-002",
                 username = "mgr_david",
-                fullName = "David Vance (Manager)",
-                email = "d.vance@smartwarehouse.net",
+                fullName = "Nimal Rathnayake",
+                email = "nimal@smartwarehouse.net",
                 role = UserRole.WAREHOUSE_MANAGER,
                 warehouseAssignedId = "WH-NORTH",
                 isActive = true
@@ -105,8 +107,8 @@ class WarehouseRepository(private val database: AppDatabase) {
             UserRole.WAREHOUSE_EMPLOYEE -> UserEntity(
                 userId = "USR-003",
                 username = "emp_104",
-                fullName = "Employee 104 (Marcus)",
-                email = "m.cole@smartwarehouse.net",
+                fullName = "Sarath pathirana",
+                email = "sarath@smartwarehouse.net",
                 role = UserRole.WAREHOUSE_EMPLOYEE,
                 warehouseAssignedId = "WH-NORTH",
                 isActive = true
@@ -121,37 +123,49 @@ class WarehouseRepository(private val database: AppDatabase) {
 
         // Match against pre-seeded enterprise accounts or requested role
         val matchedUser: UserEntity? = when {
-            role == UserRole.ADMIN || lower.contains("admin") || lower.contains("sarah") -> {
-                userDao.findUserByUsername("admin_sarah") ?: UserEntity(
+            role == UserRole.ADMIN || lower.contains("admin") || lower.contains("sarah") || lower.contains("chandeepa") -> {
+                val dbUser = userDao.findUserByUsername("admin_sarah")
+                (dbUser ?: UserEntity(
                     userId = "USR-001",
                     username = "admin_sarah",
-                    fullName = "Sarah Jenkins (Admin)",
-                    email = "s.jenkins@smartwarehouse.net",
+                    fullName = "Chandeepa karunasekara",
+                    email = "chandeepa@smartwarehouse.net",
                     role = UserRole.ADMIN,
                     warehouseAssignedId = "WH-NORTH",
                     isActive = true
+                )).copy(
+                    fullName = "Chandeepa karunasekara",
+                    email = "chandeepa@smartwarehouse.net"
                 )
             }
-            role == UserRole.WAREHOUSE_MANAGER || lower.contains("manager") || lower.contains("david") -> {
-                userDao.findUserByUsername("mgr_david") ?: UserEntity(
+            role == UserRole.WAREHOUSE_MANAGER || lower.contains("manager") || lower.contains("david") || lower.contains("nimal") -> {
+                val dbUser = userDao.findUserByUsername("mgr_david")
+                (dbUser ?: UserEntity(
                     userId = "USR-002",
                     username = "mgr_david",
-                    fullName = "David Vance (Manager)",
-                    email = "d.vance@smartwarehouse.net",
+                    fullName = "Nimal Rathnayake",
+                    email = "nimal@smartwarehouse.net",
                     role = UserRole.WAREHOUSE_MANAGER,
                     warehouseAssignedId = "WH-NORTH",
                     isActive = true
+                )).copy(
+                    fullName = "Nimal Rathnayake",
+                    email = "nimal@smartwarehouse.net"
                 )
             }
-            role == UserRole.WAREHOUSE_EMPLOYEE || lower.contains("employee") || lower.contains("marcus") || lower.contains("104") -> {
-                userDao.findUserByUsername("emp_104") ?: UserEntity(
+            role == UserRole.WAREHOUSE_EMPLOYEE || lower.contains("employee") || lower.contains("marcus") || lower.contains("104") || lower.contains("sarath") -> {
+                val dbUser = userDao.findUserByUsername("emp_104")
+                (dbUser ?: UserEntity(
                     userId = "USR-003",
                     username = "emp_104",
-                    fullName = "Employee 104 (Marcus)",
-                    email = "m.cole@smartwarehouse.net",
+                    fullName = "Sarath pathirana",
+                    email = "sarath@smartwarehouse.net",
                     role = UserRole.WAREHOUSE_EMPLOYEE,
                     warehouseAssignedId = "WH-NORTH",
                     isActive = true
+                )).copy(
+                    fullName = "Sarath pathirana",
+                    email = "sarath@smartwarehouse.net"
                 )
             }
             else -> {
