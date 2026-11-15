@@ -147,6 +147,9 @@ interface StockTransactionDao {
     @Query("SELECT * FROM stock_transactions WHERE productId = :productId ORDER BY timestamp DESC")
     fun observeTransactionsForProduct(productId: String): Flow<List<StockTransactionEntity>>
 
+    @Query("SELECT * FROM stock_transactions WHERE transactionId = :id")
+    suspend fun getTransactionById(id: String): StockTransactionEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: StockTransactionEntity)
 

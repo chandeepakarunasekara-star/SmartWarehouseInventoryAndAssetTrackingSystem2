@@ -33,7 +33,10 @@ import java.util.UUID
  * Repository orchestrating local Room persistence, offline SyncQueue management,
  * user authentication, hardware integrations, and business validation rules.
  */
-class WarehouseRepository(private val database: AppDatabase) {
+class WarehouseRepository(
+    private val database: AppDatabase,
+    private val context: android.content.Context? = null
+) {
 
     private val productDao = database.productDao()
     private val warehouseDao = database.warehouseDao()
@@ -42,6 +45,7 @@ class WarehouseRepository(private val database: AppDatabase) {
     private val syncQueueDao = database.syncQueueDao()
     private val userDao = database.userDao()
     private val remoteDataSource = RemoteWarehouseDataSource()
+    val firestoreManager = com.example.data.remote.FirebaseFirestoreManager(context)
 
     init {
         CoroutineScope(Dispatchers.IO).launch {
@@ -50,6 +54,8 @@ class WarehouseRepository(private val database: AppDatabase) {
             } else {
                 com.example.data.local.DatabaseInitialDataSeeder.updateDefaultUsers(database)
             }
+            // Two-Way Sync: Fetch and restore existing products from Cloud Firestore into local Room DB
+            firestoreManager.fetchAndSyncProductsToLocalDb(productDao)
         }
     }
 
@@ -270,14 +276,33 @@ class WarehouseRepository(private val database: AppDatabase) {
     }
 
     suspend fun saveProduct(product: ProductEntity) = withContext(Dispatchers.IO) {
+        // Step 1: Add product to local Room SQLite database first
         productDao.insertProduct(product)
 
+        var isSynced = false
+        var syncNote = "Offline mode - Queued for sync"
+
+        // Step 2: Next, if online, push to Cloud Firestore database
+        if (_isNetworkConnected.value) {
+            val firestoreResult = firestoreManager.saveProductToFirestore(product)
+            if (firestoreResult.isSuccess) {
+                isSynced = true
+                syncNote = "Synced to Firebase Cloud Firestore"
+            } else {
+                syncNote = "Firestore save notice: ${firestoreResult.exceptionOrNull()?.message ?: "Queued for sync"}"
+            }
+        }
+
+        // Step 3: Insert queue record into sync_queue table (PENDING if offline)
         val syncItem = SyncQueueEntity(
             syncId = UUID.randomUUID().toString(),
             entityType = "PRODUCT",
             entityId = product.productId,
             operationType = OperationType.CREATE,
             payloadJson = "{\"sku\":\"${product.sku}\",\"name\":\"${product.name}\",\"qty\":${product.quantity},\"img\":\"${product.imageUrl}\"}",
+            createdAt = System.currentTimeMillis(),
+            status = if (isSynced) SyncStatus.SYNCED else SyncStatus.PENDING,
+            errorMessage = syncNote,
             idempotencyKey = "PROD_${product.productId}_${product.updatedAt}"
         )
         syncQueueDao.insertSyncItem(syncItem)
@@ -290,7 +315,7 @@ class WarehouseRepository(private val database: AppDatabase) {
                 eventType = "PRODUCT_CREATED",
                 entityType = "PRODUCT",
                 entityId = product.productId,
-                details = "Product ${product.name} (SKU: ${product.sku}) saved with initial stock ${product.quantity}."
+                details = "Product ${product.name} (SKU: ${product.sku}) saved with stock ${product.quantity}. ($syncNote)"
             )
         )
     }
@@ -403,7 +428,24 @@ class WarehouseRepository(private val database: AppDatabase) {
             ?: return@withContext Result.failure(IllegalArgumentException("Product not found: $productId"))
 
         val newQuantity = product.quantity + quantity
+        val updatedProduct = product.copy(quantity = newQuantity, updatedAt = System.currentTimeMillis())
+
+        // Step 1: Update in local Room SQLite database first
         productDao.updateProductStock(productId, newQuantity)
+
+        var isSynced = false
+        var syncNote = "Offline Stock In - Queued for sync"
+
+        // Step 2: Next, if online, push to Cloud Firestore database
+        if (_isNetworkConnected.value) {
+            val prodResult = firestoreManager.saveProductToFirestore(updatedProduct)
+            if (prodResult.isSuccess) {
+                isSynced = true
+                syncNote = "Synced to Firebase Cloud Firestore"
+            } else {
+                syncNote = "Firestore sync notice: ${prodResult.exceptionOrNull()?.message ?: "Queued for sync"}"
+            }
+        }
 
         val txnId = "TXN-" + System.currentTimeMillis().toString().takeLast(6)
         val transaction = StockTransactionEntity(
@@ -419,9 +461,12 @@ class WarehouseRepository(private val database: AppDatabase) {
             referenceNumber = referenceNumber.ifBlank { "PO-$txnId" },
             notes = notes,
             transferStatus = "COMPLETED",
-            syncStatus = if (_isNetworkConnected.value) SyncStatus.SYNCED else SyncStatus.PENDING
+            syncStatus = if (isSynced) SyncStatus.SYNCED else SyncStatus.PENDING
         )
         stockTransactionDao.insertTransaction(transaction)
+        if (isSynced) {
+            firestoreManager.saveTransactionToFirestore(transaction)
+        }
 
         val syncItem = SyncQueueEntity(
             syncId = UUID.randomUUID().toString(),
@@ -429,6 +474,9 @@ class WarehouseRepository(private val database: AppDatabase) {
             entityId = txnId,
             operationType = OperationType.STOCK_IN,
             payloadJson = "{\"productId\":\"$productId\",\"quantity\":$quantity,\"destinationLocation\":\"$destinationLocationId\"}",
+            createdAt = System.currentTimeMillis(),
+            status = if (isSynced) SyncStatus.SYNCED else SyncStatus.PENDING,
+            errorMessage = syncNote,
             idempotencyKey = "TXN_${txnId}_IN"
         )
         syncQueueDao.insertSyncItem(syncItem)
@@ -441,7 +489,7 @@ class WarehouseRepository(private val database: AppDatabase) {
                 eventType = "STOCK_IN",
                 entityType = "PRODUCT",
                 entityId = productId,
-                details = "Stock In: +$quantity for ${product.name}. New total: $newQuantity (Ref: $referenceNumber)."
+                details = "Stock In: +$quantity for ${product.name}. New total: $newQuantity. ($syncNote)"
             )
         )
 
@@ -468,7 +516,24 @@ class WarehouseRepository(private val database: AppDatabase) {
         }
 
         val newQuantity = product.quantity - quantity
+        val updatedProduct = product.copy(quantity = newQuantity, updatedAt = System.currentTimeMillis())
+
+        // Step 1: Update in local Room SQLite database first
         productDao.updateProductStock(productId, newQuantity)
+
+        var isSynced = false
+        var syncNote = "Offline Stock Out - Queued for sync"
+
+        // Step 2: Next, if online, push to Cloud Firestore database
+        if (_isNetworkConnected.value) {
+            val prodResult = firestoreManager.saveProductToFirestore(updatedProduct)
+            if (prodResult.isSuccess) {
+                isSynced = true
+                syncNote = "Synced to Firebase Cloud Firestore"
+            } else {
+                syncNote = "Firestore sync notice: ${prodResult.exceptionOrNull()?.message ?: "Queued for sync"}"
+            }
+        }
 
         val txnId = "TXN-" + System.currentTimeMillis().toString().takeLast(6)
         val transaction = StockTransactionEntity(
@@ -484,9 +549,12 @@ class WarehouseRepository(private val database: AppDatabase) {
             referenceNumber = referenceNumber.ifBlank { "DISP-$txnId" },
             notes = notes,
             transferStatus = "COMPLETED",
-            syncStatus = if (_isNetworkConnected.value) SyncStatus.SYNCED else SyncStatus.PENDING
+            syncStatus = if (isSynced) SyncStatus.SYNCED else SyncStatus.PENDING
         )
         stockTransactionDao.insertTransaction(transaction)
+        if (isSynced) {
+            firestoreManager.saveTransactionToFirestore(transaction)
+        }
 
         val syncItem = SyncQueueEntity(
             syncId = UUID.randomUUID().toString(),
@@ -494,6 +562,9 @@ class WarehouseRepository(private val database: AppDatabase) {
             entityId = txnId,
             operationType = OperationType.STOCK_OUT,
             payloadJson = "{\"productId\":\"$productId\",\"quantity\":$quantity,\"reason\":\"$destinationNotes\"}",
+            createdAt = System.currentTimeMillis(),
+            status = if (isSynced) SyncStatus.SYNCED else SyncStatus.PENDING,
+            errorMessage = syncNote,
             idempotencyKey = "TXN_${txnId}_OUT"
         )
         syncQueueDao.insertSyncItem(syncItem)
@@ -518,7 +589,7 @@ class WarehouseRepository(private val database: AppDatabase) {
                 eventType = "STOCK_OUT",
                 entityType = "PRODUCT",
                 entityId = productId,
-                details = "Stock Out: -$quantity for ${product.name}. Remaining: $newQuantity (Ref: $referenceNumber)."
+                details = "Stock Out: -$quantity for ${product.name}. Remaining: $newQuantity. ($syncNote)"
             )
         )
 
@@ -545,8 +616,23 @@ class WarehouseRepository(private val database: AppDatabase) {
             )
         }
 
-        // Relocate product to new destination bin
+        // Step 1: Update location in local Room SQLite database first
         productDao.updateProductLocation(productId, destinationWarehouseId, destinationLocationId)
+
+        var isSynced = false
+        var syncNote = "Offline Stock Transfer - Queued for sync"
+
+        // Step 2: Next, if online, push to Cloud Firestore database
+        if (_isNetworkConnected.value) {
+            val updatedProduct = product.copy(locationId = destinationLocationId, warehouseId = destinationWarehouseId, updatedAt = System.currentTimeMillis())
+            val prodResult = firestoreManager.saveProductToFirestore(updatedProduct)
+            if (prodResult.isSuccess) {
+                isSynced = true
+                syncNote = "Synced to Firebase Cloud Firestore"
+            } else {
+                syncNote = "Firestore sync notice: ${prodResult.exceptionOrNull()?.message ?: "Queued for sync"}"
+            }
+        }
 
         val txnId = "TXN-" + System.currentTimeMillis().toString().takeLast(6)
         val transaction = StockTransactionEntity(
@@ -564,9 +650,12 @@ class WarehouseRepository(private val database: AppDatabase) {
             transferStatus = if (_currentUser.value.role == UserRole.WAREHOUSE_EMPLOYEE) "PENDING" else "APPROVED",
             requestedBy = _currentUser.value.fullName,
             approvedBy = if (_currentUser.value.role != UserRole.WAREHOUSE_EMPLOYEE) _currentUser.value.fullName else "",
-            syncStatus = if (_isNetworkConnected.value) SyncStatus.SYNCED else SyncStatus.PENDING
+            syncStatus = if (isSynced) SyncStatus.SYNCED else SyncStatus.PENDING
         )
         stockTransactionDao.insertTransaction(transaction)
+        if (isSynced) {
+            firestoreManager.saveTransactionToFirestore(transaction)
+        }
 
         val syncItem = SyncQueueEntity(
             syncId = UUID.randomUUID().toString(),
@@ -574,6 +663,9 @@ class WarehouseRepository(private val database: AppDatabase) {
             entityId = txnId,
             operationType = OperationType.TRANSFER,
             payloadJson = "{\"productId\":\"$productId\",\"quantity\":$quantity,\"from\":\"${product.locationId}\",\"to\":\"$destinationLocationId\"}",
+            createdAt = System.currentTimeMillis(),
+            status = if (isSynced) SyncStatus.SYNCED else SyncStatus.PENDING,
+            errorMessage = syncNote,
             idempotencyKey = "TXN_${txnId}_XFR"
         )
         syncQueueDao.insertSyncItem(syncItem)
@@ -586,7 +678,7 @@ class WarehouseRepository(private val database: AppDatabase) {
                 eventType = "STOCK_TRANSFER",
                 entityType = "PRODUCT",
                 entityId = productId,
-                details = "Transferred $quantity units of ${product.name} to $destinationLocationId."
+                details = "Transferred $quantity units of ${product.name} to $destinationLocationId. ($syncNote)"
             )
         )
 
@@ -723,6 +815,9 @@ class WarehouseRepository(private val database: AppDatabase) {
     suspend fun processSyncQueue(): Int = withContext(Dispatchers.IO) {
         if (!_isNetworkConnected.value) return@withContext 0
 
+        // Two-way sync: Pull remote products from Firebase Cloud Firestore into local Room DB
+        firestoreManager.fetchAndSyncProductsToLocalDb(productDao)
+
         val pending = syncQueueDao.getPendingOrFailedItems()
         if (pending.isEmpty()) return@withContext 0
         var syncedCount = 0
@@ -734,6 +829,21 @@ class WarehouseRepository(private val database: AppDatabase) {
         for (item in pending) {
             try {
                 syncQueueDao.updateSyncItem(item.copy(status = SyncStatus.IN_PROGRESS, lastAttemptAt = System.currentTimeMillis()))
+
+                // Push item to Firebase Cloud Firestore based on entity type
+                if (item.entityType == "PRODUCT") {
+                    productDao.getProductById(item.entityId)?.let { prod ->
+                        firestoreManager.saveProductToFirestore(prod)
+                    }
+                } else if (item.entityType == "INVENTORY_TRANSACTION") {
+                    stockTransactionDao.getTransactionById(item.entityId)?.let { txn ->
+                        firestoreManager.saveTransactionToFirestore(txn)
+                        productDao.getProductById(txn.productId)?.let { prod ->
+                            firestoreManager.saveProductToFirestore(prod)
+                        }
+                    }
+                }
+
                 kotlinx.coroutines.delay(60)
                 syncQueueDao.updateSyncItem(
                     item.copy(

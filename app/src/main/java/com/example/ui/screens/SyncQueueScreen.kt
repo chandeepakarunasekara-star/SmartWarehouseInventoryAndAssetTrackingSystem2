@@ -142,9 +142,9 @@ fun SyncQueueScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 MinimalButton(
-                    text = if (isSyncing) "Syncing..." else "Sync Now ($pendingCount)",
+                    text = if (isSyncing) "Syncing..." else if (pendingCount > 0) "Sync Now ($pendingCount)" else "Sync Cloud",
                     icon = Icons.Default.Sync,
-                    enabled = isOnline && !isSyncing && pendingCount > 0,
+                    enabled = isOnline && !isSyncing,
                     onClick = { viewModel.triggerSyncNow() },
                     modifier = Modifier.weight(1f),
                     testTag = "trigger_sync_button"

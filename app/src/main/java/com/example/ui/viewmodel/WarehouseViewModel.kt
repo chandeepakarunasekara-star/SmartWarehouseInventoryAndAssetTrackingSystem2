@@ -32,6 +32,14 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 /**
+ * Data class representing operation success pop-up info for Stock In, Stock Out, and Product Insertion.
+ */
+data class OperationSuccessInfo(
+    val title: String,
+    val message: String
+)
+
+/**
  * Navigation routes supported across the Smart Warehouse application,
  * matching all 28 use cases from the specifications.
  */
@@ -291,6 +299,11 @@ class WarehouseViewModel(
 
             try {
                 repository.saveProduct(newProduct)
+                val syncStatusMsg = if (isNetworkConnected.value) "Room database & Cloud Firestore synced." else "Room database updated (queued for offline sync)."
+                showOperationSuccessPopup(
+                    title = "New Product Inserted!",
+                    message = "Product '${newProduct.name}' (SKU: ${newProduct.sku}, Quantity: ${newProduct.quantity}) inserted successfully. $syncStatusMsg"
+                )
                 showFeedback("Successfully added '${newProduct.name}' to Room Database!")
                 onComplete(true, null)
             } catch (e: Exception) {
@@ -394,6 +407,7 @@ class WarehouseViewModel(
 
     // Status snackbar / feedback
     val statusMessage = MutableStateFlow<String?>(null)
+    val operationSuccessPopup = MutableStateFlow<OperationSuccessInfo?>(null)
 
     fun showFeedback(message: String) {
         statusMessage.value = message
@@ -401,6 +415,14 @@ class WarehouseViewModel(
 
     fun dismissFeedback() {
         statusMessage.value = null
+    }
+
+    fun showOperationSuccessPopup(title: String, message: String) {
+        operationSuccessPopup.value = OperationSuccessInfo(title, message)
+    }
+
+    fun dismissOperationSuccessPopup() {
+        operationSuccessPopup.value = null
     }
 
     // Stock In action
@@ -420,6 +442,11 @@ class WarehouseViewModel(
                 notes
             )
             result.onSuccess {
+                val syncStatusMsg = if (isNetworkConnected.value) "Added to Room database & synced to Cloud Firestore." else "Added to Room database (queued for offline sync)."
+                showOperationSuccessPopup(
+                    title = "Stock-In Operation Completed!",
+                    message = "Successfully received $quantity units into inventory. $syncStatusMsg"
+                )
                 showFeedback("Stock-In successful! Added $quantity units.")
                 _allLocations.value = repository.getAllLocations()
             }.onFailure { e ->
@@ -444,6 +471,11 @@ class WarehouseViewModel(
                 notes = "Quick restock from Inventory Dashboard"
             )
             result.onSuccess {
+                val syncStatusMsg = if (isNetworkConnected.value) "Room database & Cloud Firestore synced." else "Room database updated (queued for offline sync)."
+                showOperationSuccessPopup(
+                    title = "Stock-In Operation Completed!",
+                    message = "Quick restock of +$quantity units for ${matchingProd?.name ?: "item"} completed successfully. $syncStatusMsg"
+                )
                 showFeedback("Restocked +$quantity units for ${matchingProd?.name ?: "item"}!")
             }.onFailure { e ->
                 showFeedback("Restock failed: ${e.message}")
@@ -468,6 +500,11 @@ class WarehouseViewModel(
                 notes
             )
             result.onSuccess {
+                val syncStatusMsg = if (isNetworkConnected.value) "Room database & Cloud Firestore synced." else "Room database updated (queued for offline sync)."
+                showOperationSuccessPopup(
+                    title = "Stock-Out Operation Completed!",
+                    message = "Successfully dispatched $quantity units. $syncStatusMsg"
+                )
                 showFeedback("Stock-Out successful! Deducted $quantity units.")
             }.onFailure { e ->
                 showFeedback("Stock-Out failed: ${e.message}")
@@ -544,6 +581,11 @@ class WarehouseViewModel(
                 imageUrl = imageUrl.trim()
             )
             repository.saveProduct(product)
+            val syncStatusMsg = if (isNetworkConnected.value) "Room database & Cloud Firestore synced." else "Room database updated (queued for offline sync)."
+            showOperationSuccessPopup(
+                title = "New Product Inserted!",
+                message = "Product '${product.name}' (SKU: ${product.sku}, Quantity: ${product.quantity}) inserted successfully. $syncStatusMsg"
+            )
             showFeedback("Created product ${product.name} (SKU: ${product.sku})")
         }
     }

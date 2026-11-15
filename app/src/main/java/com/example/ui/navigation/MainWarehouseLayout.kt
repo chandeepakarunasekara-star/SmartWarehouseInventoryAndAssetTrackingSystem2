@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Dashboard
@@ -40,8 +41,11 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -74,6 +78,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -135,6 +140,7 @@ fun MainWarehouseLayout(
     val syncQueue by viewModel.syncQueue.collectAsState()
     val notifications by viewModel.notifications.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
+    val successPopupInfo by viewModel.operationSuccessPopup.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
 
     val pendingSyncCount = syncQueue.count { it.status.name == "PENDING" || it.status.name == "FAILED" }
@@ -554,6 +560,60 @@ fun MainWarehouseLayout(
                 else -> DashboardScreen(viewModel = viewModel)
             }
         }
+    }
+
+    // Operation Completion Success Pop-up Dialog
+    if (successPopupInfo != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissOperationSuccessPopup() },
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFE8F5E9)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Success",
+                        tint = Color(0xFF10B981),
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+            },
+            title = {
+                Text(
+                    text = successPopupInfo?.title ?: "Operation Completed",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Slate900,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Text(
+                    text = successPopupInfo?.message ?: "",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Slate700,
+                    textAlign = TextAlign.Center
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.dismissOperationSuccessPopup() },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF084B34)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("dismiss_success_popup_button")
+                ) {
+                    Text("OK", fontWeight = FontWeight.Bold)
+                }
+            },
+            shape = RoundedCornerShape(24.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     }
 
     // More Modules Bottom Sheet

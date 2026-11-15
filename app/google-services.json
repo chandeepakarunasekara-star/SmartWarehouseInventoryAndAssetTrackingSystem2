@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "508305037105",
+    "project_id": "smart-warehouse-system-f85d8",
+    "storage_bucket": "smart-warehouse-system-f85d8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:508305037105:android:22ee0cdc9836e815568210",
+        "android_client_info": {
+          "package_name": "com.chandeepaproject.warehouse.invxqa"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCyYavKnqCM3m3lBVYQadK-2E_aRhhlD0g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

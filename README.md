@@ -76,6 +76,20 @@ The system enforces strict permission scoping across 3 operational profiles:
 
 ---
 
+## 🔑 User Authentication & Login Credentials
+
+The application uses **Firebase Authentication** with offline cached identity support. Below are the default pre-configured credentials for each user role:
+
+| Access Role | Role Selector Pill | Email Address                        | Default Password | Scoped Capabilities & Access Level |
+|:---|:---|:-------------------------------------|:---|:---|
+| 📦 **Warehouse Employee** | **Employee** | `sarath@smartwarehouse.net`<br>**    | `warehouse123` | Barcode/QR scanning, receiving stock (Stock-In), issuing stock (Stock-Out), bin finder, and asset relocation. |
+| 📋 **Warehouse Manager** | **Manager** | `nimal@smartwarehouse.net`<br>**     | `warehouse123` | Inter-warehouse transfer approvals, asset assignments, financial reports, analytics charts, low stock alerts. |
+| ⚙️ **Administrator** | **Admin** | `chandeepa@smartwarehouse.net`<br>** | `warehouse123` | Full system administration, user account creation, warehouse & location setup, category setup, system audit logs. |
+
+> **Note**: To switch access roles on the login screen, select the corresponding role pill (**Employee**, **Manager**, or **Admin**), enter the credentials, and tap the sign-in button.
+
+---
+
 ## 📁 Key File Structure & Functions
 
 ```

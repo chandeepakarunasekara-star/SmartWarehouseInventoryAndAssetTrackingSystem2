@@ -28,8 +28,8 @@ class MainActivity : ComponentActivity() {
         // Acquire local Room SQLite database instance
         val database = AppDatabase.getInstance(applicationContext)
 
-        // Repository provides abstracted access to Room database and offline SyncQueue
-        val repository = WarehouseRepository(database)
+        // Repository provides abstracted access to Room database, Firebase Cloud Firestore, and offline SyncQueue
+        val repository = WarehouseRepository(database, applicationContext)
 
         // Factory instantiates WarehouseViewModel with repository dependency injection
         val viewModelFactory = WarehouseViewModelFactory(repository, applicationContext)
